@@ -40,3 +40,14 @@ Get-OwaVirtualDirectory | Set-OwaVirtualDirectory -AdfsAuthentication $true -Bas
 
 Debugging
 
+in C:\Program Files\Microsoft\Exchange Server\V15\FrontEnd\HttpProxy\owa\web.config
+
+<system.diagnostics>
+<sources>
+<source name="Microsoft.IdentityModel" switchValue="Warning">
+<listeners>
+<add name="traceListener" type="System.Diagnostics.XmlWriterTraceListener" initializeData="c:\temp\WIFTrace.log" />
+</listeners>
+</source>
+</sources>
+</system.diagnostics>

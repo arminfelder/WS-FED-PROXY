@@ -38,13 +38,14 @@ router.get('/',(req,res,next)=>{
         }
         return callback(null, redirectUrl)
     }
-})});
+})(req,res,next)
+});
 
 router.get('/FederationMetadata/2007-06/FederationMetadata.xml', (req,res, next)=> {
     return wsfed.metadata({
         issuer: 'the-issuer',
         cert: fs.readFileSync(path.join(__dirname, '../certs/', req.app.get("WSFED_CERT"))),
-    })
+    })(req, res)
 });
 
 router.get('/adfs/fs/federationserverservice.asmx',
@@ -55,7 +56,7 @@ router.post('/adfs/fs/federationserverservice.asmx',
     return wsfed.federationServerService.thumbprint({
       pkcs7: fs.readFileSync(path.join(__dirname, '../certs/', req.app.get("WSFED_PKCS7"))),
       cert:  fs.readFileSync(path.join(__dirname, '../certs/', req.app.get("WSFED_CERT")))
-    })
+    })(req, res)
 });
 
 
