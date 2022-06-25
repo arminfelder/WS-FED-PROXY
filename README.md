@@ -57,7 +57,7 @@ openssl crl2pkcs7 -nocrl -certfile signing_cert.crt -out signing_cert.p7b
 ```
 
 or via Exchange
-```PowerShell
+```powershell
 New-ExchangeCertificate -subjectname "CN=mycorp" -PrivateKeyExportable $true
 ```
 
@@ -70,12 +70,12 @@ New-ExchangeCertificate -subjectname "CN=mycorp" -PrivateKeyExportable $true
 cut -d "=" -f2  <<< $(openssl x509 -noout -fingerprint -sha1 -inform pem -in signing_cert.crt) | tr -d ":" 
 ```
 
-2. configure Excnahge for ADFS
-```PowerShell
+2. configure Exchange for ADFS
+```powershell
 $issuer = "<use value from WSFED_ISSUER>"
 $cert = '<fingerprint from WS-Fed Proxy signing cert>'
 
-Set-OrganizationConfig -AdfsIssuer $issuer -AdfsAudienceUris "https://<exchange URI>/owa/, https://<exchange URI>/ecp/" -AdfsSignCertificateThumbprint $cert
+Set-OrganizationConfig -AdfsIssuer $issuer -AdfsAudienceUris "https://<exchange URI>/owa/,https://<exchange URI>/ecp/" -AdfsSignCertificateThumbprint $cert
 
 Get-EcpVirtualDirectory | Set-EcpVirtualDirectory -AdfsAuthentication $true -BasicAuthentication $false -DigestAuthentication $false -FormsAuthentication $false -WindowsAuthentication $false
 Get-OwaVirtualDirectory | Set-OwaVirtualDirectory -AdfsAuthentication $true -BasicAuthentication $false -DigestAuthentication $false -FormsAuthentication $false -WindowsAuthentication $false
