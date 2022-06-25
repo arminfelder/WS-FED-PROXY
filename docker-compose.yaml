@@ -1,6 +1,16 @@
 version: "3.3"
 
 services:
+  proxy:
+    build: .
+    environment:
+      DEBUG: "ws-fed-saml-proxy:*"
+      HTTPS: "true"
+      SAML2_CLAIMS_UPN: "upn"
+      SAML2_IDP: "https://armin-ThinkPad-P50:8443/auth/realms/master/protocol/saml"
+      WSFED_ISSUER: "https://armin-ThinkPad-P50:3000/wsfed"
+    ports:
+      - "3000:3000"
   keycloak:
     image: jboss/keycloak:16.1.0
     environment:
@@ -9,10 +19,12 @@ services:
       DEBUG: "true"
       DEBUG_PORT: "*:8787"
       KEYCLOAK_IMPORT: "/opt/jboss/realm.json"
+    command:
+      - "-b 0.0.0.0 -Dkeycloak.migration.action=export -Dkeycloak.migration.provider=singleFile -Dkeycloak.migration.file=/backup/bak.json"
     ports:
     - 8443:8443
     - 8080:8080
     - 5005:8787
     volumes:
     - ./realm.json:/opt/jboss/realm.json
-
+    - ./backup:/backup

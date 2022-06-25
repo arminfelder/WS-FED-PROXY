@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 
 const session = require('express-session');
+const MemoryStore = require('memorystore')(session)
 const wsfed = require("wsfed");
 const fs = require("fs");
 const passport = require('passport');
@@ -27,6 +28,9 @@ app.use(bodyParser.urlencoded({ extended: false }))
 
 app.use(session({
     saveUninitialized: true,
+    store: new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+    }),
     resave: false,
     secret: 'bla bla bla'
 }));
