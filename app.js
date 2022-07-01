@@ -68,6 +68,7 @@ app.use(function(err, req, res, next) {
     app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auht/realms/master/protocol/saml');
     app.set("SAML2_CLAIMS_UPN",process.env.SAML2_CLAIMS_UPN || "urn:oid:1.2.840.113549.1.9.1");
     app.set("SAML2_CLAIMS_SID", process.env.SAML2_CLAIMS_SID || "sid");
+    app.set("SAML2_CLAIMS_SID_BASE64", process.env.SAML2_CLAIMS_SID_BASE64 || true)
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
     app.set("WSFED_ISSUER", process.env.WSFED_ISSUER || "https://localhost:3000/wsfed");
     app.set("WSFED_CERT", process.env.WSFED_CERT || "exchange.crt");
@@ -88,7 +89,17 @@ passport.use(new SamlStrategy(
         const user = {};
         user.id = profile["nameID"];
         user.upn = profile[app.get("SAML2_CLAIMS_UPN")];
-        user.sid = profile[app.get("SAML2_CLAIMS_SID")];
+
+        if(profile.hasOwnProperty(app.get("SAML2_CLAIMS_SID"))){
+            let sid = "";
+            if(app.get("SAML2_CLAIMS_SID_BASE64") === true){
+                sid = new Buffer(profile[app.get("SAML2_CLAIMS_SID")], 'base64')
+            }else {
+                sid = profile[app.get("SAML2_CLAIMS_SID")]
+            }
+            user.sid =  sid;
+        }
+
 
         return done(null, user);
     })
