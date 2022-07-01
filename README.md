@@ -12,6 +12,7 @@ configuration is done via, the following environment variables:
 - SAML2_IDP (address of the SAML2 IDP)
 - SAML2_CLAIMS_UPN (name of the SAML2 claim holding the UPN)
 - SAML2_CLAIMS_SID (name of the SAML2 claim holding the SID)
+- SAML2_CLAIMS_SID_BASE64 (let WSFED decode SID from base64, default is true)
 - SAML2_IDP_PUB_KEY (public key from the SAML2 IDP)
 - WSFED_ISSUER (issuer to used in the assertion, has to be the URI to this Proxy including path to WS-Fed endpoint, e.g. https://ws-fed-proxy/wsfed)
 - WSFED_CERT (path to PEM cert for signing the assertion)
