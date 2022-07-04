@@ -26,7 +26,7 @@ const path = require("path");
 
 var server = {};
 
-if(process.env.hasOwnProperty("HTTPS") && Boolean(process.env.HTTPS) === true) {
+if(process.env.hasOwnProperty("HTTPS") && process.env.HTTPS.toLowerCase() === "true") {
   const key = fs.readFileSync(path.join(__dirname, (process.env.HTTPS_KEY || '../selfsigned.key')));
   const cert = fs.readFileSync(path.join(__dirname, (process.env.HTTPS_CERT || '../selfsigned.crt')));
   const options = {

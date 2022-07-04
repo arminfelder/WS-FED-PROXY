@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
+const ecsFormat = require('@elastic/ecs-morgan-format')
 const sidConverter = require('security-identifier');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session)
@@ -21,7 +22,7 @@ const saml2Router = require('./routes/saml2');
 const wsfedRouter = require('./routes/wsfed');
 const bodyParser = require("express");
 
-app.use(logger('dev'));
+app.use(logger(ecsFormat()));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.urlencoded({ extended: false }))
