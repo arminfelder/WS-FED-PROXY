@@ -6,7 +6,9 @@ a simple WS-Fed SAML2 proxy, made to connect Outlook Web Access(OWA), to an arbi
 
 ## configuration
 configuration is done via, the following environment variables:
-
+- HTTPS (optional: true|false, use HTTPS for WSFED server)
+- HTTPS_KEY (key for WSFED server cert, default: ../selfsigned.key (app root/selfsigned.key))
+- HTTPS_CERT (cert for WSFED server, default: ../selfsigned.cert (app root/selfsigned.cert))
 - SAML2_ISSUER (SAML2 issuer to be used by this SAML2 client)
 - SAML2_IDENTIFIER_FORMAT (SAML2 identifier format set by the IDP)
 - SAML2_IDP (address of the SAML2 IDP)
