@@ -17,6 +17,7 @@
     "passport": "^0.6.0",
     "passport-saml": "^3.2.1",
     "pug": "2.0.0-beta11",
+    "security-identifier": "^1.0.0",
     "wsfed": "^6.1.0"
   }
 }
