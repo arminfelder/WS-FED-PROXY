@@ -3,7 +3,7 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
-
+const sidConverter = require('security-identifier');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session)
 const wsfed = require("wsfed");
@@ -93,7 +93,8 @@ passport.use(new SamlStrategy(
         if(profile.hasOwnProperty(app.get("SAML2_CLAIMS_SID"))){
             let sid = "";
             if(app.get("SAML2_CLAIMS_SID_BASE64").toLowerCase() === "true"){
-                sid = new Buffer(profile[app.get("SAML2_CLAIMS_SID")], 'base64')
+                const sid_binary = Buffer.from(new Buffer(profile[app.get("SAML2_CLAIMS_SID")], 'base64'), 'hex');
+                sid = sidConverter.sidBufferToString(sid_binary)
             }else {
                 sid = profile[app.get("SAML2_CLAIMS_SID")]
             }
