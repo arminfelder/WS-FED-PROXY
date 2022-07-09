@@ -9,6 +9,7 @@ router.get('/login',passport.authenticate("saml",{
 }));
 
 router.get('/logout',function (req, res, next){
+    // we need an user object for passport-saml, to create the LogoutRequest
     req.user = {};
     next();
 },function(req,res){
