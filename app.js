@@ -9,6 +9,7 @@ const session = require('express-session');
 const MemoryStore = require('memorystore')(session)
 const wsfed = require("wsfed");
 const fs = require("fs");
+const crypto = require('crypto');
 const passport = require('passport');
 const SamlStrategy = require('passport-saml').Strategy;
 
@@ -23,6 +24,7 @@ const wsfedRouter = require('./routes/wsfed');
 const bodyParser = require("express");
 
 (function () {
+    app.set("SESSION_SECRET",process.env.SESSION_SECRET || crypto.randomBytes(120).toString('hex'));
     app.set("SAML2_ISSUER",process.env.SAML2_ISSUER || 'passport-js');
     app.set("SAML2_IDENTIFIER_FORMAT",process.env.SAML2_IDENTIFIER_FORMAT || 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified');
     app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auht/realms/master/protocol/saml');
@@ -36,7 +38,6 @@ const bodyParser = require("express");
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
 })();
 
-
 app.use(logger(ecsFormat()));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -48,8 +49,7 @@ app.use(session({
         checkPeriod: 86400000 // prune expired entries every 24h
     }),
     resave: false,
-    // TODO: set secret via env var
-    secret: 'bla bla bla'
+    secret: app.get("SESSION_SECRET")
 }));
 
 app.use(passport.initialize());
@@ -113,6 +113,8 @@ passport.use(new SamlStrategy(
         // for logout
         const user = {};
         user.id = profile["nameID"];
+        user.nameID = profile["nameID"];
+        user.nameIDFormat = profile["nameIDFormat"];
         return done(null, user);
     })
 );
