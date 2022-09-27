@@ -15,17 +15,31 @@ GNU General Public License for more details.
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-var express = require('express');
+const express = require('express');
 const passport = require("passport");
 const bodyParser = require("express");
-var router = express.Router();
+const samlStrategy = require('passport-saml').Strategy;
+const router = express.Router();
 
 router.get('/login',passport.authenticate("saml",{
     failureRedirect: "/saml2/failure"
 }));
 
-router.get('/logout',function(req,res){
-    res.send("logout");
+router.get('/logout',function (req, res, next){
+    // we need an user object for passport-saml, to create the LogoutRequest
+    req.user = {};
+    next();
+},function(req,res){
+    passport._strategy('saml').logout(req, function(err, requestUrl) {
+        // LOCAL logout
+        req.logout(function(err) {
+            if (err) { return next(err); }
+            res.redirect(requestUrl);
+        });
+        // redirect to the IdP with the encrypted SAML logout request
+
+    });
+   // res.send("logout");
 });
 
 router.get('/failure',function(req, res, next) {
@@ -48,5 +62,7 @@ router.post('/callback',
             res.redirect("/wsfed");
         }
 );
+
+
 
 module.exports = router;

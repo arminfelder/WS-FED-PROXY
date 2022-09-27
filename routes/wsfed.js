@@ -25,13 +25,14 @@ const router = express.Router();
 
 
 router.get('/',(req,res,next)=>{
-    if(req.isAuthenticated()){
+    if(req.query.hasOwnProperty("wa")&& req.query.wa === "wsignout1.0") {
+        res.redirect("/saml2/logout");
+    }
+    else if(req.isAuthenticated()){
         const sessData = req.session;
         req.query = sessData.wsfed_args
 
         next();
-    }else if(req.query.hasOwnProperty("wa")&& req.query.wa === "wsignout1.0"){
-        res.redirect("/saml2/logout");
     }else {
         const sessData = req.session;
         sessData.wsfed_args = Object.assign({},req.query);
@@ -45,9 +46,8 @@ router.get('/',(req,res,next)=>{
     key:        fs.readFileSync(path.join(__dirname, '../certs', req.app.get("WSFED_KEY"))),
     profileMapper: profileMapper,
     getPostURL: function (wtrealm, wreply, req, callback) {
-        //TODO logout on SAML2 IDP
         req.session.destroy();
-        redirectUrl = ""
+        let redirectUrl = ""
         if(wreply === undefined) {
             redirectUrl = wtrealm;
         }else{

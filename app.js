@@ -111,7 +111,8 @@ passport.use(new SamlStrategy(
         const user = {};
         user.id = profile["nameID"];
         user.upn = profile[app.get("SAML2_CLAIMS_UPN")];
-
+        user.nameID = profile["nameID"];
+        user.nameIDFormat = profile["nameIDFormat"];
         if(profile.hasOwnProperty(app.get("SAML2_CLAIMS_SID"))){
             let sid = "";
             if(app.get("SAML2_CLAIMS_SID_BASE64").toLowerCase() === "true"){
@@ -124,6 +125,13 @@ passport.use(new SamlStrategy(
         }
 
 
+        return done(null, user);
+    },function (profile, done) {
+        // for logout
+        const user = {};
+        user.id = profile["nameID"];
+        user.nameID = profile["nameID"];
+        user.nameIDFormat = profile["nameIDFormat"];
         return done(null, user);
     })
 );
