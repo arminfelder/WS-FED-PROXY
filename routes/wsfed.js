@@ -26,7 +26,7 @@ const router = express.Router();
 
 router.get('/',(req,res,next)=>{
     if(req.query.hasOwnProperty("wa")&& req.query.wa === "wsignout1.0") {
-        res.redirect("/saml2/logout");
+        res.redirect(req.app.get("SAML2_ROOT") + "/logout");
     }
     else if(req.isAuthenticated()){
         const sessData = req.session;
@@ -37,7 +37,7 @@ router.get('/',(req,res,next)=>{
         const sessData = req.session;
         sessData.wsfed_args = Object.assign({},req.query);
         req.session.save();
-        res.redirect("/saml2/login");
+        res.redirect(req.app.get("SAML2_ROOT") + "/login");
     }
 },(req,res,next)=>{
    return wsfed.auth({

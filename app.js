@@ -45,14 +45,16 @@ const bodyParser = require("express");
     app.set("SAML2_ISSUER",process.env.SAML2_ISSUER || 'passport-js');
     app.set("SAML2_IDENTIFIER_FORMAT",process.env.SAML2_IDENTIFIER_FORMAT || 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified');
     app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auht/realms/master/protocol/saml');
-    app.set("SAML2_CLAIMS_UPN",process.env.SAML2_CLAIMS_UPN || "urn:oid:1.2.840.113549.1.9.1");
+    app.set("SAML2_CLAIMS_UPN",process.env.SAML2_CLAIMS_UPN || "upn");
     app.set("SAML2_CLAIMS_SID", process.env.SAML2_CLAIMS_SID || "sid");
     app.set("SAML2_CLAIMS_SID_BASE64", process.env.SAML2_CLAIMS_SID_BASE64 || "true" )
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
+    app.set("SAML2_ROOT", process.env.SAML2_ROOT || "/saml2");
     app.set("WSFED_ISSUER", process.env.WSFED_ISSUER || "https://localhost:3000/wsfed");
     app.set("WSFED_CERT", process.env.WSFED_CERT || "exchange.crt");
     app.set("WSFED_KEY", process.env.WSFED_KEY || "exchange.key");
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
+    app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
 })();
 
 app.use(logger(ecsFormat()));
@@ -75,8 +77,8 @@ app.use(passport.session({
 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/saml2', saml2Router);
-app.use('/wsfed', wsfedRouter);
+app.use(app.get("SAML2_ROOT"), saml2Router);
+app.use(app.get("WSFED_ROOT"), wsfedRouter);
 
 
 
@@ -100,7 +102,7 @@ app.use(function(err, req, res, next) {
 
 passport.use(new SamlStrategy(
     {
-      path: '/saml2/callback',
+      path: app.get("SAML2_ROOT") + '/callback',
       protocol: "https",
       entryPoint: app.get("SAML2_IDP"),
       issuer: app.get("SAML2_ISSUER"),

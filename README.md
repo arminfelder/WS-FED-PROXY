@@ -21,7 +21,8 @@ configuration is done via, the following environment variables:
 - WSFED_CERT (path to PEM cert for signing the assertion)
 - WSFED_KEY (path to KEY for WSFED_CERT)
 - WSFED_PKCS7 (path to WSFED_CERT in PKCS7 format, for use with WSFED metadata.xml)
-
+- SAML2_ROOT (path of the SAML2 endpoint e.g. /saml2)
+- WSFED_ROOT (path of the WSFED endpoing e.g. /wsfed)
 
 
 ## endpoints
