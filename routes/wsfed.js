@@ -28,10 +28,9 @@ router.get('/',(req,res,next)=>{
     if(req.query.hasOwnProperty("wa")&& req.query.wa === "wsignout1.0") {
         res.redirect(req.app.get("SAML2_ROOT") + "/logout");
     }
-    else if(req.isAuthenticated()){
+    else if(req.isAuthenticated() && req.session.hasOwnProperty("wsfed_args")){
         const sessData = req.session;
         req.query = sessData.wsfed_args
-
         next();
     }else {
         const sessData = req.session;
@@ -46,7 +45,13 @@ router.get('/',(req,res,next)=>{
     key:        fs.readFileSync(path.join(__dirname, '../certs', req.app.get("WSFED_KEY"))),
     profileMapper: profileMapper,
     getPostURL: function (wtrealm, wreply, req, callback) {
-        req.session.destroy();
+        // immediately destroy the session data
+        req.session.destroy(function (err){
+            if(err){
+                console.log(err)
+            }
+            res.clearCookie("connect.sid")
+        });
         let redirectUrl = ""
         if(wreply === undefined) {
             redirectUrl = wtrealm;

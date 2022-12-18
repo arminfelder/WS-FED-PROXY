@@ -63,9 +63,12 @@ app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.urlencoded({ extended: false }))
 
 app.use(session({
-    saveUninitialized: true,
+    cookie: {
+        maxAge: 600000
+    },
+    saveUninitialized: false,
     store: new MemoryStore({
-        checkPeriod: 86400000 // prune expired entries every 24h
+        checkPeriod: 60000 // prune expired entries every 1m
     }),
     resave: false,
     secret: app.get("SESSION_SECRET")
