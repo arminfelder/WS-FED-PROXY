@@ -21,10 +21,10 @@ const bodyParser = require("express");
 const samlStrategy = require('passport-saml').Strategy;
 const router = express.Router();
 
-router.get('/login',function(req) {
+router.get('/login',function(req, res, next) {
     passport.authenticate("saml",{
         failureRedirect: req.app.get("SAML2_ROOT") + "/failure"
-})});
+})(req, res, next)});
 
 router.get('/logout',function (req, res, next){
     // we need an user object for passport-saml, to create the LogoutRequest
@@ -56,9 +56,9 @@ router.get('/callback',function(req, res, next) {
     res.redirect(req.app.get("WSFED_ROOT"));
 });
 
-router.post('/callback', function (req) {
+router.post('/callback', function (req, res, next) {
         passport.authenticate("saml", { failureRedirect: req.app.get("SAML2_ROOT") + "/", failureFlash: true, keepSessionInfo: true
-})},
+})(req, res, next)},
         function (req, res) {
             res.redirect(req.app.get("WSFED_ROOT"));
         }
