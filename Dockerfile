@@ -7,7 +7,7 @@ COPY . /app
 
 WORKDIR /app
 
-RUN npm install ci
+RUN npm ci
 
 RUN chown -R node /app
 

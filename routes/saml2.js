@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 const express = require('express');
 const passport = require("passport");
 const bodyParser = require("express");
-const samlStrategy = require('passport-saml').Strategy;
+const samlStrategy = require('@node-saml/passport-saml').Strategy;
 const router = express.Router();
 
 router.get('/login',function(req, res, next) {
