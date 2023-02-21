@@ -28,7 +28,7 @@ const wsfed = require("wsfed");
 const fs = require("fs");
 const crypto = require('crypto');
 const passport = require('passport');
-const SamlStrategy = require('passport-saml').Strategy;
+const SamlStrategy = require('@node-saml/passport-saml').Strategy;
 
 const app = express();
 
@@ -109,6 +109,7 @@ passport.use(new SamlStrategy(
       protocol: "https",
       entryPoint: app.get("SAML2_IDP"),
       issuer: app.get("SAML2_ISSUER"),
+      wantAssertionsSigned: false,
       identifierFormat: app.get("SAML2_IDENTIFIER_FORMAT"),
       cert: fs.readFileSync(path.join(__dirname, "./certs" ,app.get("SAML2_IDP_PUB_KEY")), { encoding: 'utf8' }), // cert must be provided
     },
