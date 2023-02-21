@@ -35,6 +35,11 @@ router.get('/logout',function (req, res, next){
         // LOCAL logout
         req.logout(function(err) {
             if (err) { return next(err); }
+            req.session.destroy(function (err){
+                if(err){
+                    console.log(err)
+                }
+            });
             res.redirect(requestUrl);
         });
         // redirect to the IdP with the encrypted SAML logout request
