@@ -1,0 +1,7 @@
+default:
+  image: node:bullseye-slim
+
+
+test:
+  script:
+    - npm audit
