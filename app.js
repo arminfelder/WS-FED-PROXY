@@ -44,7 +44,7 @@ const bodyParser = require("express");
     app.set("SESSION_SECRET",process.env.SESSION_SECRET || crypto.randomBytes(120).toString('hex'));
     app.set("SAML2_ISSUER",process.env.SAML2_ISSUER || 'passport-js');
     app.set("SAML2_IDENTIFIER_FORMAT",process.env.SAML2_IDENTIFIER_FORMAT || 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified');
-    app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auht/realms/master/protocol/saml');
+    app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auth/realms/master/protocol/saml');
     app.set("SAML2_CLAIMS_UPN",process.env.SAML2_CLAIMS_UPN || "upn");
     app.set("SAML2_CLAIMS_SID", process.env.SAML2_CLAIMS_SID || "sid");
     app.set("SAML2_CLAIMS_SID_BASE64", process.env.SAML2_CLAIMS_SID_BASE64 || "true" )
@@ -55,6 +55,7 @@ const bodyParser = require("express");
     app.set("WSFED_KEY", process.env.WSFED_KEY || "exchange.key");
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
+    app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
 })();
 
 app.use(logger(ecsFormat()));

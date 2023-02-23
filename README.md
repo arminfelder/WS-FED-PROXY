@@ -23,6 +23,7 @@ configuration is done via, the following environment variables:
 - WSFED_PKCS7 (path to WSFED_CERT in PKCS7 format, for use with WSFED metadata.xml)
 - SAML2_ROOT (path of the SAML2 endpoint e.g. /saml2)
 - WSFED_ROOT (path of the WSFED endpoing e.g. /wsfed)
+- INVALID_LOGIN_REDIRECT (optional: url to redirect to in case of an invalid login request)
 
 
 ## endpoints
