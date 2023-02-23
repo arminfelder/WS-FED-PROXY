@@ -29,8 +29,26 @@ const fs = require("fs");
 const crypto = require('crypto');
 const passport = require('passport');
 const SamlStrategy = require('@node-saml/passport-saml').Strategy;
+const helmet = require('helmet');
 
 const app = express();
+
+//app.use(helmet.contentSecurityPolicy());
+app.use(helmet.crossOriginEmbedderPolicy());
+app.use(helmet.crossOriginOpenerPolicy());
+app.use(helmet.crossOriginResourcePolicy());
+app.use(helmet.dnsPrefetchControl());
+app.use(helmet.frameguard());
+app.use(helmet.hidePoweredBy());
+app.use(helmet.hsts());
+app.use(helmet.ieNoOpen());
+app.use(helmet.noSniff());
+app.use(helmet.originAgentCluster());
+app.use(helmet.permittedCrossDomainPolicies());
+//app.use(helmet.referrerPolicy());
+app.use(helmet.xssFilter());
+
+
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -65,7 +83,11 @@ app.use(bodyParser.urlencoded({ extended: false }))
 
 app.use(session({
     cookie: {
-        maxAge: 600000
+        maxAge: 600000,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+        domain: new URL(app.get("WSFED_ISSUER")).hostname
     },
     saveUninitialized: false,
     store: new MemoryStore({
@@ -77,7 +99,7 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session({
-    keepSessionInfo: true
+    keepSessionInfo: false
 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
