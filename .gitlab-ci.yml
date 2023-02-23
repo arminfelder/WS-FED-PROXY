@@ -1,7 +1,26 @@
-default:
+stages:
+  - audit
+  - check_report
+
+audit:
   image: node:bullseye-slim
 
-
-test:
+  stage: audit
+  tags: [docker]
   script:
-    - npm audit
+    - npm audit --omit=dev -json > audit.json
+  artifacts:
+    paths:
+      - audit.json
+
+
+check_report:
+  image:
+    name: stedolan/jq
+    entrypoint: [""]
+  stage: check_report
+  tags: [docker]
+  script:
+    - critical=$(cat audit.json | jq ".metadata.vulnerabilities.critical"); if [ $critical != 0  ]; then exit 1; fi
+  dependencies:
+    - audit
