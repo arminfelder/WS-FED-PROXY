@@ -74,6 +74,7 @@ const bodyParser = require("express");
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
+    app.set("ALLOW_PROXY", (process.env.ALLOW_PROXY || "false").toLowerCase() === "true" );
 })();
 
 app.use(logger(ecsFormat()));
@@ -82,6 +83,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(bodyParser.urlencoded({ extended: false }))
 
 app.use(session({
+    proxy: app.get("ALLOW_PROXY"),
     cookie: {
         maxAge: 600000,
         httpOnly: true,
