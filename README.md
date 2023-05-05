@@ -24,7 +24,7 @@ configuration is done via, the following environment variables:
 - SAML2_ROOT (path of the SAML2 endpoint e.g. /saml2)
 - WSFED_ROOT (path of the WSFED endpoing e.g. /wsfed)
 - INVALID_LOGIN_REDIRECT (optional: url to redirect to in case of an invalid login request)
-- ALLOW_PROXY (optional: true|false, allow operation behind a reverse proxy)
+- TRUST_PROXY (optional: true|false, allow operation behind a reverse proxy)
 
 ## endpoints
 
