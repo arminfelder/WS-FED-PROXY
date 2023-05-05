@@ -7,10 +7,18 @@ services:
       DEBUG: "ws-fed-saml-proxy:*"
       HTTPS: "true"
       SAML2_CLAIMS_UPN: "upn"
-      SAML2_IDP: "https://armin-ThinkPad-P50:8443/auth/realms/master/protocol/saml"
-      WSFED_ISSUER: "https://armin-ThinkPad-P50:3000/wsfed"
+      SAML2_IDP: "https://proxy-host:8443/auth/realms/master/protocol/saml"
+      WSFED_ISSUER: "https://proxy-host:3000/wsfed"
     ports:
       - "3000:3000"
+  nginx:
+    image: nginx:1.24.0
+    ports:
+      - 443:443
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./selfsigned.crt:/etc/nginx/selfsigned.crt
+      - ./selfsigned.key:/etc/nginx/selfsigned.key
   keycloak:
     image: jboss/keycloak:16.1.0
     environment:
@@ -18,18 +26,13 @@ services:
       KEYCLOAK_PASSWORD: "1234"
       DEBUG: "true"
       DEBUG_PORT: "*:8787"
-     # KEYCLOAK_IMPORT: "/opt/jboss/realm.json"
     command:
-    #  - "-b 0.0.0.0 -Dkeycloak.migration.action=import -Dkeycloak.migration.provider=singleFile -Dkeycloak.migration.file=/backup/bak1.json"
       - "-b 0.0.0.0"
     ports:
     - 8443:8443
     - 8080:8080
     - 5005:8787
     volumes:
-    #- ./realm.json:/opt/jboss/realm.json
-    - ./backup:/backup
     - kc_data:/opt/jboss/keycloak/standalone/data/
-
 volumes:
   kc_data: {}
