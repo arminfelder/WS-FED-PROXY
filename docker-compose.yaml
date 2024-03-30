@@ -7,8 +7,10 @@ services:
       DEBUG: "ws-fed-saml-proxy:*"
       HTTPS: "true"
       SAML2_CLAIMS_UPN: "upn"
-      SAML2_IDP: "https://proxy-host:8443/auth/realms/master/protocol/saml"
-      WSFED_ISSUER: "https://proxy-host:3000/wsfed"
+      SAML2_IDP: "https://proxy_host:8443/auth/realms/master/protocol/saml"
+      WSFED_ISSUER: "https://proxy_host:3000/wsfed"
+    volumes:
+      - ./certs/idp.pem:/app/certs/idp.pem:ro
     ports:
       - "3000:3000"
   nginx:
