@@ -130,13 +130,14 @@ app.use(function(err, req, res, next) {
 
 passport.use(new SamlStrategy(
     {
+      callbackUrl:  "https://" + new URL(app.get("WSFED_ISSUER")).host + app.get("SAML2_ROOT") + "/callback",
       path: app.get("SAML2_ROOT") + '/callback',
       protocol: "https",
       entryPoint: app.get("SAML2_IDP"),
       issuer: app.get("SAML2_ISSUER"),
       wantAssertionsSigned: false,
       identifierFormat: app.get("SAML2_IDENTIFIER_FORMAT"),
-      cert: fs.readFileSync(path.join(__dirname, "./certs" ,app.get("SAML2_IDP_PUB_KEY")), { encoding: 'utf8' }), // cert must be provided
+      idpCert: fs.readFileSync(path.join(__dirname, "./certs" ,app.get("SAML2_IDP_PUB_KEY")), { encoding: 'utf8' }), // cert must be provided
     },
     function(profile, done) {
         const user = {};
