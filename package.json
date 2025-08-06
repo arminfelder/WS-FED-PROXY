@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@elastic/ecs-morgan-format": "^1.1.0",
-    "@node-saml/passport-saml": "^4.0.2",
+    "@node-saml/passport-saml": "^5.1.0",
     "ci": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",

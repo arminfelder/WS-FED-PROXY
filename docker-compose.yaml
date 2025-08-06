@@ -22,7 +22,7 @@ services:
       - ./selfsigned.crt:/etc/nginx/selfsigned.crt
       - ./selfsigned.key:/etc/nginx/selfsigned.key
   keycloak:
-    image: jboss/keycloak:16.1.0
+    image: quay.io/keycloak/keycloak:16.1.0
     environment:
       KEYCLOAK_USER: "admin"
       KEYCLOAK_PASSWORD: "1234"
