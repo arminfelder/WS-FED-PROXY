@@ -30,11 +30,13 @@ services:
       DEBUG_PORT: "*:8787"
     command:
       - "-b 0.0.0.0"
+      - -Dkeycloak.migration.action=import
+      - -Dkeycloak.migration.provider=singleFile
+      - -Dkeycloak.migration.file=/tmp/realm.json
     ports:
     - 8443:8443
     - 8080:8080
     - 5005:8787
     volumes:
-    - kc_data:/opt/jboss/keycloak/standalone/data/
-volumes:
-  kc_data: {}
+      - ./realm.json:/tmp/realm.json
+
