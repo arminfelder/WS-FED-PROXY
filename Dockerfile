@@ -1,7 +1,4 @@
-FROM node:lts-bullseye-slim
-
-
-RUN useradd appuser
+FROM node:lts-bullseye-slim AS builder
 
 COPY . /app
 
@@ -9,6 +6,12 @@ WORKDIR /app
 
 RUN npm ci
 
-RUN chown -R node /app
+FROM gcr.io/distroless/nodejs24-debian13:nonroot
 
-CMD npm start
+COPY --from=builder /app /app
+
+WORKDIR /app
+
+USER 1000
+
+CMD ["./bin/www"]
