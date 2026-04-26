@@ -14,6 +14,7 @@ const fs = require('fs');
 const { DOMParser } = require('@xmldom/xmldom');
 const { SignedXml } = require('xml-crypto');
 const wsfed = require('wsfed');
+const helmet = require('helmet');
 const profileMapper = require('../../util/OWAProfileMapper');
 
 const CERT_PATH = path.join(__dirname, '../fixtures/test-cert.pem');
@@ -33,6 +34,8 @@ const TEST_USER = {
 
 function buildTokenApp(opts = {}) {
     const app = express();
+    app.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: ["'none'"], scriptSrc: ["'unsafe-inline'", "'unsafe-eval'"], formAction: ["https:"] } }));
+    app.use(helmet.referrerPolicy({ policy: 'origin-when-cross-origin' }));
     app.use(express.urlencoded({ extended: false }));
     app.use(session({ secret: 'test', resave: false, saveUninitialized: false, cookie: { secure: false } }));
 
@@ -194,5 +197,33 @@ describe('WS-Fed token — full round-trip (no OWA needed)', () => {
         const conditions = assertionDoc.documentElement.getElementsByTagName('saml:Conditions')[0];
         expect(conditions.getAttribute('NotBefore')).toBeTruthy();
         expect(conditions.getAttribute('NotOnOrAfter')).toBeTruthy();
+    });
+});
+
+describe('WS-Fed token response — security headers', () => {
+    let res;
+
+    beforeAll(async () => {
+        const app = buildTokenApp();
+        res = await request(app)
+            .get('/wsfed')
+            .query({ wa: 'wsignin1.0', wtrealm: WTREALM, wreply: WREPLY, wctx: WCTX });
+    });
+
+    test('Referrer-Policy is origin-when-cross-origin so Exchange receives the Origin on the form POST', () => {
+        // no-referrer breaks Exchange 440: it strips the Referer header from the
+        // cross-origin form POST, which Exchange uses to correlate its WS-Fed session.
+        expect(res.headers['referrer-policy']).toBe('origin-when-cross-origin');
+    });
+
+    test('Content-Security-Policy allows unsafe-eval for the auto-submit form script', () => {
+        // window.setTimeout(string) is treated as eval() by browsers and requires unsafe-eval.
+        const csp = res.headers['content-security-policy'];
+        expect(csp).toContain("'unsafe-eval'");
+    });
+
+    test('Content-Security-Policy form-action allows HTTPS targets', () => {
+        const csp = res.headers['content-security-policy'];
+        expect(csp).toContain('form-action https:');
     });
 });

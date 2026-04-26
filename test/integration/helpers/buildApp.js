@@ -9,6 +9,7 @@
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
+const { hppPrevent } = require('hpp-prevent');
 const { parseAllowedRealms } = require('../../../util/validateRedirect');
 
 /**
@@ -36,6 +37,7 @@ function buildApp(opts = {}) {
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
     app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(opts.WSFED_ALLOWED_REALMS || ''));
 
+    app.use(hppPrevent());
     app.use(express.urlencoded({ extended: false }));
     app.use(express.json());
 

@@ -1,6 +1,5 @@
 extends layout
 
 block content
-  h1= message
-  h2= error.status
-  pre #{error.stack}
+  h1= statusCode + ' ' + statusMessage
+  p An error occurred. Please try again or contact your administrator.
