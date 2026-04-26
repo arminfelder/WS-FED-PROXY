@@ -30,6 +30,7 @@ const crypto = require('crypto');
 const passport = require('passport');
 const SamlStrategy = require('@node-saml/passport-saml').Strategy;
 const helmet = require('helmet');
+const { parseAllowedRealms } = require('./util/validateRedirect');
 
 const app = express();
 
@@ -75,6 +76,7 @@ const bodyParser = require("express");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
     app.set("TRUST_PROXY", (process.env.TRUST_PROXY || "false").toLowerCase() === "true" );
+    app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));
 })();
 
 app.use(logger(ecsFormat()));
