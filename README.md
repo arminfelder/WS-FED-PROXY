@@ -1,110 +1,145 @@
 
 # WSFED Proxy
 
-a simple WS-Fed SAML2 proxy, made to connect Outlook Web Access(OWA), to an arbitrary SAML2 IDP, via the WS-Fed Protocol
-(http://docs.oasis-open.org/wsfed/federation/v1.2/ws-federation.html), used by ADFS
+A WS-Fed / SAML2 proxy that connects Outlook Web Access (OWA) to an arbitrary SAML2 IdP via the WS-Federation protocol used by ADFS.
 
-## configuration
-configuration is done via, the following environment variables:
-- SESSION_SECRET (optional: secret used to encrypt session, default: is generated randomly on startup)
-- HTTPS (optional: true|false, use HTTPS for WSFED server)
-- HTTPS_KEY (key for WSFED server cert, default: ../selfsigned.key (app root/selfsigned.key))
-- HTTPS_CERT (cert for WSFED server, default: ../selfsigned.cert (app root/selfsigned.cert))
-- SAML2_ISSUER (SAML2 issuer to be used by this SAML2 client)
-- SAML2_IDENTIFIER_FORMAT (SAML2 identifier format set by the IDP)
-- SAML2_IDP (address of the SAML2 IDP)
-- SAML2_CLAIMS_UPN (name of the SAML2 claim holding the UPN)
-- SAML2_CLAIMS_SID (name of the SAML2 claim holding the SID, in either base64 or plaintext)
-- SAML2_CLAIMS_SID_BASE64 (let WSFED decode SID from base64, default is true)
-- SAML2_IDP_PUB_KEY (public key from the SAML2 IDP)
-- WSFED_ISSUER (issuer to used in the assertion, has to be the URI to this Proxy including path to WS-Fed endpoint, e.g. https://ws-fed-proxy/wsfed)
-- WSFED_CERT (path to PEM cert for signing the assertion)
-- WSFED_KEY (path to KEY for WSFED_CERT)
-- WSFED_PKCS7 (path to WSFED_CERT in PKCS7 format, for use with WSFED metadata.xml)
-- SAML2_ROOT (path of the SAML2 endpoint e.g. /saml2)
-- WSFED_ROOT (path of the WSFED endpoing e.g. /wsfed)
-- INVALID_LOGIN_REDIRECT (optional: url to redirect to in case of an invalid login request)
-- TRUST_PROXY (optional: true|false, allow operation behind a reverse proxy)
+## Configuration
 
-## endpoints
+All configuration is done via environment variables.
 
-- /saml2/callback (callback for SAML2 login)
-- /saml2/login (initiates SAML2 login)
-- /saml2/logout (SAML2 logout) "not implemented yet"
-- /wsfed (WS-Fed endpoint)
-- /wsfed/FederationMetadata/2007-06/FederationMetadata.xml (metadata)
-- /wsfed/adfs/fs/federationserverservice.asmx (metadata)
+### Server
 
-## examples
+| Variable | Default | Description |
+|---|---|---|
+| `HTTPS` | — | Set to `true` to enable HTTPS on the Node server directly |
+| `HTTPS_KEY` | `../selfsigned.key` | Path to the TLS private key (relative to `bin/`) |
+| `HTTPS_CERT` | `../selfsigned.crt` | Path to the TLS certificate (relative to `bin/`) |
+| `PORT` | `3000` | Listening port |
+| `TRUST_PROXY` | `false` | Set to `true` when running behind a reverse proxy (sets `X-Forwarded-*` trust) |
+| `SESSION_SECRET` | random | Secret used to sign the session cookie. **Must be set to a stable secret in production.** |
+| `SESSION_MAX_STORE` | `500` | Maximum number of concurrent sessions held in memory. Prevents unbounded memory growth. |
+| `INVALID_LOGIN_REDIRECT` | — | URL to redirect to when a request arrives at `/wsfed` with no valid WS-Fed parameters. Returns `400` if unset. |
+| `NODE_ENV` | — | Set to `production` to enable production guards (e.g. fatal startup error if `WSFED_ISSUER` contains `localhost`) |
 
-### authenticate Exchange OWA with Keycloak
+### WS-Federation
 
-#### configure Keycloak
+| Variable | Default | Description |
+|---|---|---|
+| `WSFED_ISSUER` | `https://localhost:3000/wsfed` | Full URI of this proxy's WS-Fed endpoint. Must match `AdfsIssuer` configured in Exchange. **Required in production.** |
+| `WSFED_CERT` | `exchange.crt` | Filename of the signing certificate (PEM), relative to `certs/` |
+| `WSFED_KEY` | `exchange.key` | Filename of the signing private key (PEM), relative to `certs/` |
+| `WSFED_PKCS7` | `exchange.p7b` | Filename of the signing certificate in PKCS#7 format, relative to `certs/`. Used by the ADFS SOAP metadata endpoint. |
+| `WSFED_ROOT` | `/wsfed` | URL path prefix for WS-Fed endpoints |
+| `WSFED_ALLOWED_REALMS` | — | Comma-separated list of allowed `wtrealm` URLs (e.g. `https://exchange.corp/owa/,https://exchange.corp/ecp/`). When set, any `wtrealm` or `wreply` whose origin is not in this list is rejected with `403`. When unset, `wreply` must share the same origin as `wtrealm` (same-origin fallback). |
 
-1. make sure SID and UPN are available as user attributes
-2. create a new SAML2 client e.g. "wsfed-proxy"
-3. create a mapper for upn and sid e.g. sid -> sid, upn->upn
+### SAML2
 
-#### configure WS-Fed proxy
+| Variable | Default | Description |
+|---|---|---|
+| `SAML2_IDP` | `https://localhost:8443/auth/realms/master/protocol/saml` | Entry point URL of the SAML2 IdP |
+| `SAML2_IDP_PUB_KEY` | `idp.pem` | Filename of the IdP's public key/certificate (PEM), relative to `certs/` |
+| `SAML2_ISSUER` | `passport-js` | SAML2 `Issuer` sent in the `AuthnRequest` to the IdP |
+| `SAML2_IDENTIFIER_FORMAT` | `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified` | NameID format requested from the IdP |
+| `SAML2_CLAIMS_UPN` | `upn` | Name of the SAML2 attribute holding the User Principal Name |
+| `SAML2_CLAIMS_SID` | `sid` | Name of the SAML2 attribute holding the Windows SID |
+| `SAML2_CLAIMS_SID_BASE64` | `true` | Set to `false` if the IdP sends the SID as a plain string rather than base64-encoded binary |
+| `SAML2_ROOT` | `/saml2` | URL path prefix for SAML2 endpoints |
+| `SAML2_WANT_ASSERTIONS_SIGNED` | `true` | Require individual SAML assertions to be signed in addition to the response envelope. Set to `false` only if your IdP signs the response but not individual assertions. |
 
-1. generate cert for signing assertions
-e.g.
-```bash
-openssl req -new \
--newkey rsa:2048 -nodes -keyout signing_cert.key \
--out signing_cert.csr \
--subj "/CN=mycorp"
+## Endpoints
+
+| Path | Description |
+|---|---|
+| `{WSFED_ROOT}` | WS-Fed passive sign-in / sign-out entry point |
+| `{WSFED_ROOT}/FederationMetadata/2007-06/FederationMetadata.xml` | WS-Fed metadata document (used by Exchange for discovery) |
+| `{WSFED_ROOT}/adfs/fs/federationserverservice.asmx` | ADFS SOAP endpoint (returns signing cert thumbprint to Exchange) |
+| `{SAML2_ROOT}/login` | Initiates SAML2 authentication |
+| `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding) |
+| `{SAML2_ROOT}/logout` | Initiates SAML2 logout |
+
+## Logging
+
+All log output is written to **stdout** as ECS-compliant JSON, suitable for ingestion by Elastic/Kibana or any JSON log shipper.
+
+Every log line contains `http.request.id` — a UUID generated per request. Use it to correlate access log entries with error/warning entries for the same request:
+
 ```
-```bash
-openssl x509 -signkey signing_cert.key -in cert_req.csr -req -days 365 -out signing_cert.crt -days 365
+# access log entry
+{"@timestamp":"…","log.level":"info","message":"access_log","http.request.id":"a1b2c3d4-…",…}
+
+# error log entry for the same request
+{"@timestamp":"…","log.level":"warn","message":"wtrealm not in allowlist: …","http.request.id":"a1b2c3d4-…",…}
 ```
+
+Log levels:
+- `info` — every completed request (access log)
+- `warn` — client errors (4xx) with the reason
+- `error` — server errors (5xx) with full stack trace
+
+## Examples
+
+### Authenticate Exchange OWA with Keycloak
+
+#### Configure Keycloak
+
+1. Ensure SID and UPN are available as user attributes
+2. Create a SAML2 client (e.g. `wsfed-proxy`)
+3. Add attribute mappers: `upn` → `upn`, `sid` → `sid`
+
+#### Generate a signing certificate
+
 ```bash
+openssl req -new -newkey rsa:2048 -nodes -keyout signing_cert.key \
+  -out signing_cert.csr -subj "/CN=mycorp"
+openssl x509 -signkey signing_cert.key -in signing_cert.csr -req \
+  -days 365 -out signing_cert.crt
 openssl crl2pkcs7 -nocrl -certfile signing_cert.crt -out signing_cert.p7b
 ```
 
-or via Exchange
-```powershell
-New-ExchangeCertificate -subjectname "CN=mycorp" -PrivateKeyExportable $true
-```
+#### Configure Exchange
 
-#### configure Exchange
+1. Install the signing certificate into the Trusted People store on Exchange.
 
-1. install signing cert into trusted people store
-
-2. get fingerprint from WS-Fed Proxy signing cert
+2. Get the certificate thumbprint:
 ```bash
-cut -d "=" -f2  <<< $(openssl x509 -noout -fingerprint -sha1 -inform pem -in signing_cert.crt) | tr -d ":" 
+cut -d= -f2 <<< $(openssl x509 -noout -fingerprint -sha1 -inform pem -in signing_cert.crt) | tr -d ":"
 ```
 
-2. configure Exchange for ADFS
+3. Configure Exchange for ADFS authentication:
 ```powershell
-$issuer = "<use value from WSFED_ISSUER>"
-$cert = '<fingerprint from WS-Fed Proxy signing cert>'
+$issuer = "<value of WSFED_ISSUER>"
+$cert   = "<thumbprint from step 2>"
 
-Set-OrganizationConfig -AdfsIssuer $issuer -AdfsAudienceUris "https://<exchange URI>/owa/,https://<exchange URI>/ecp/" -AdfsSignCertificateThumbprint $cert
+Set-OrganizationConfig `
+  -AdfsIssuer $issuer `
+  -AdfsAudienceUris "https://<exchange>/owa/","https://<exchange>/ecp/" `
+  -AdfsSignCertificateThumbprint $cert
 
-Get-EcpVirtualDirectory | Set-EcpVirtualDirectory -AdfsAuthentication $true -BasicAuthentication $false -DigestAuthentication $false -FormsAuthentication $false -WindowsAuthentication $false
-Get-OwaVirtualDirectory | Set-OwaVirtualDirectory -AdfsAuthentication $true -BasicAuthentication $false -DigestAuthentication $false -FormsAuthentication $false -WindowsAuthentication $false
+Get-EcpVirtualDirectory | Set-EcpVirtualDirectory `
+  -AdfsAuthentication $true -BasicAuthentication $false `
+  -DigestAuthentication $false -FormsAuthentication $false -WindowsAuthentication $false
+
+Get-OwaVirtualDirectory | Set-OwaVirtualDirectory `
+  -AdfsAuthentication $true -BasicAuthentication $false `
+  -DigestAuthentication $false -FormsAuthentication $false -WindowsAuthentication $false
 ```
 
-#### debugging WS-Fed authmethod with Exchange
+> **Note:** `AdfsAudienceUris` must exactly match the `wtrealm` value OWA sends, which is derived from the URL the user uses to access OWA. If users access OWA via multiple hostnames, add all of them.
 
-in OWA web.config e.g. (C:\Program Files\Microsoft\Exchange Server\V15\FrontEnd\HttpProxy\owa\web.config)
-add
+#### Debugging WS-Fed authentication with Exchange
+
+Add to `web.config` on the Exchange front-end (e.g. `C:\Program Files\Microsoft\Exchange Server\V15\FrontEnd\HttpProxy\owa\web.config`):
+
 ```xml
 <system.diagnostics>
-    <sources>
-        <source name="Microsoft.IdentityModel" switchValue="Warning">
-            <listeners>
-                <add name="traceListener" type="System.Diagnostics.XmlWriterTraceListener" initializeData="<logpath>\WIFTrace.log" />
-            </listeners>
-        </source>
-    </sources>
+  <sources>
+    <source name="Microsoft.IdentityModel" switchValue="Warning">
+      <listeners>
+        <add name="traceListener"
+             type="System.Diagnostics.XmlWriterTraceListener"
+             initializeData="C:\logs\WIFTrace.log" />
+      </listeners>
+    </source>
+  </sources>
 </system.diagnostics>
 ```
-
-
-
-
-
-

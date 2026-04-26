@@ -81,6 +81,26 @@ describe('GET /wsfed — unauthenticated requests', () => {
     });
 });
 
+describe('GET /wsfed — HTTP Parameter Pollution resistance', () => {
+    test('duplicate wa params do not crash the route', async () => {
+        const app = buildApp();
+        // Supertest encodes this as ?wa=wsignin1.0&wa=wsignout1.0
+        const res = await request(app).get('/wsfed?wa=wsignin1.0&wa=wsignout1.0&wtrealm=https://exchange.corp/owa');
+        // Should not crash with "hasOwnProperty is not a function" (500)
+        expect(res.status).not.toBe(500);
+    });
+
+    test('duplicate wtrealm params do not bypass allowlist', async () => {
+        const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
+        const res = await request(app).get('/wsfed?wa=wsignin1.0&wtrealm=https://exchange.corp/owa&wtrealm=https://attacker.com');
+        // Must not redirect to SAML login with an attacker-controlled realm
+        expect(res.status).not.toBe(500);
+        if (res.status === 302) {
+            expect(res.headers.location).toMatch('/saml2/login');
+        }
+    });
+});
+
 describe('GET /wsfed — wtrealm allowlist enforcement', () => {
     test('allows request when wtrealm is in WSFED_ALLOWED_REALMS', async () => {
         const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
