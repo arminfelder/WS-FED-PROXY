@@ -2,7 +2,6 @@
 .git
 node_modules
 certs
-test
 backup
 share
 realm.json
