@@ -20,6 +20,7 @@ const wsfed = require("wsfed");
 const fs = require("fs");
 const path = require("path");
 const profileMapper = require("../util/OWAProfileMapper");
+const { isRealmAllowed, isWreplyAllowed } = require("../util/validateRedirect");
 const router = express.Router();
 
 
@@ -32,6 +33,13 @@ router.get('/',(req,res,next)=>{
         req.query = sessData.wsfed_args
         next();
     }else if ( req.query.hasOwnProperty("wa") && req.query.hasOwnProperty("wtrealm") ){   // user does is not logged in and requests a login
+        const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+        if (!isRealmAllowed(req.query.wtrealm, allowedOrigins)) {
+            return res.sendStatus(403);
+        }
+        if (!isWreplyAllowed(req.query.wreply, req.query.wtrealm, allowedOrigins)) {
+            return res.sendStatus(403);
+        }
         const sessData = req.session;
         sessData.wsfed_args = Object.assign({},req.query);
         req.session.save();
@@ -72,7 +80,7 @@ router.get('/',(req,res,next)=>{
 
 router.get('/FederationMetadata/2007-06/FederationMetadata.xml', (req,res, next)=> {
     return wsfed.metadata({
-        issuer: 'the-issuer',
+        issuer: req.app.get("WSFED_ISSUER"),
         cert: fs.readFileSync(path.join(__dirname, '../certs/', req.app.get("WSFED_CERT"))),
     })(req, res)
 });

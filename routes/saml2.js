@@ -49,17 +49,9 @@ router.get('/logout',function (req, res, next){
 });
 
 router.get('/failure',function(req, res, next) {
-    res.code()
+    res.status(401).send('Authentication failed');
 });
 
-
-router.get('/callback',function(req, res, next) {
-    const xmlResponse = req.body.SAMLResponse;
-    const parser = new Saml2js(xmlResponse);
-    req.samlUserObject = parser.toObject();
-    next();
-    res.redirect(req.app.get("WSFED_ROOT"));
-});
 
 router.post('/callback', function (req, res, next) {
         passport.authenticate("saml", { failureRedirect: req.app.get("SAML2_ROOT") + "/", failureFlash: true, keepSessionInfo: true
