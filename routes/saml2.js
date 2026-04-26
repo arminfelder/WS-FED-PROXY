@@ -54,11 +54,20 @@ router.get('/failure',function(req, res, next) {
 
 
 router.post('/callback', function (req, res, next) {
-        passport.authenticate("saml", { failureRedirect: req.app.get("SAML2_ROOT") + "/", failureFlash: true, keepSessionInfo: true
-})(req, res, next)},
-        function (req, res) {
-            res.redirect(req.app.get("WSFED_ROOT"));
-        }
+        passport.authenticate("saml", {
+            failureRedirect: req.app.get("SAML2_ROOT") + "/failure",
+            failureFlash: true,
+            keepSessionInfo: true,
+        })(req, res, function(err) {
+            // Treat any error (e.g. malformed XML, invalid signature) as an
+            // auth failure — never expose internal error details to the client
+            if (err) return res.redirect(req.app.get("SAML2_ROOT") + "/failure");
+            next();
+        });
+    },
+    function (req, res) {
+        res.redirect(req.app.get("WSFED_ROOT"));
+    }
 );
 
 

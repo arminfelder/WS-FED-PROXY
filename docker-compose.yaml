@@ -4,7 +4,6 @@ services:
   proxy:
     build: .
     environment:
-      DEBUG: "*:*"
       FAILED_LOGIN_REDIRECT: https://localhost
       HTTPS: false
       SAML2_CLAIMS_SID_BASE64: false
