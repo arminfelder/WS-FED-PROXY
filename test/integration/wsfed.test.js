@@ -126,18 +126,17 @@ describe('GET /wsfed — wtrealm allowlist enforcement', () => {
         expect(res.status).toBe(403);
     });
 
-    test('allows any wtrealm when WSFED_ALLOWED_REALMS is not configured', async () => {
-        const app = buildApp();
+    test('blocks every wtrealm when WSFED_ALLOWED_REALMS is empty (fails closed)', async () => {
+        const app = buildApp({ WSFED_ALLOWED_REALMS: '' });
         const res = await request(app)
             .get('/wsfed')
             .query({ wa: 'wsignin1.0', wtrealm: 'https://anything.corp/owa' });
-        expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.status).toBe(403);
     });
 });
 
 describe('GET /wsfed — wreply open-redirect prevention', () => {
-    test('blocks wreply pointing to a different origin than wtrealm (no allowlist)', async () => {
+    test('blocks wreply pointing to a different origin than wtrealm', async () => {
         const app = buildApp();
         const res = await request(app)
             .get('/wsfed')
@@ -149,7 +148,7 @@ describe('GET /wsfed — wreply open-redirect prevention', () => {
         expect(res.status).toBe(403);
     });
 
-    test('allows wreply sharing the wtrealm origin (no allowlist)', async () => {
+    test('allows wreply sharing the wtrealm origin when both are allowlisted', async () => {
         const app = buildApp();
         const res = await request(app)
             .get('/wsfed')
@@ -160,6 +159,20 @@ describe('GET /wsfed — wreply open-redirect prevention', () => {
             });
         expect(res.status).toBe(302);
         expect(res.headers.location).toMatch('/saml2/login');
+    });
+
+    test('an attacker-chosen wtrealm cannot vouch for its own wreply', async () => {
+        // the old same-origin fallback accepted this: same origin, but both
+        // values come from the attacker
+        const app = buildApp({ WSFED_ALLOWED_REALMS: '' });
+        const res = await request(app)
+            .get('/wsfed')
+            .query({
+                wa: 'wsignin1.0',
+                wtrealm: 'https://attacker.tld',
+                wreply: 'https://attacker.tld/collect',
+            });
+        expect(res.status).toBe(403);
     });
 
     test('blocks wreply not in allowlist even if wtrealm is allowed', async () => {
