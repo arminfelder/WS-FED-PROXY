@@ -1,4 +1,9 @@
 .idea
+.git
 node_modules
 certs
+backup
+share
+realm.json
 Dockerfile
+*.md

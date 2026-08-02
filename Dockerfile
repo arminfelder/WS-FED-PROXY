@@ -6,6 +6,8 @@ WORKDIR /app
 
 RUN npm ci
 
+RUN npm test
+
 FROM gcr.io/distroless/nodejs24-debian13:nonroot
 
 COPY --from=builder /app /app
