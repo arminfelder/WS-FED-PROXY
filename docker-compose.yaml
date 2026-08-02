@@ -14,6 +14,10 @@ services:
       TRUST_PROXY: 1
       WSFED_ISSUER: https://192.168.102.1/wsfed
       WSFED_ROOT: /wsfed
+      # mandatory. The Exchange origins, not this proxy's — OWA derives wtrealm
+      # from the browsed URL, so list every hostname/IP OWA is reached by and
+      # keep it in sync with Exchange's AdfsAudienceUris.
+      WSFED_ALLOWED_REALMS: https://localhost,https://server,https://server.corp.contoso.com,https://192.168.102.2
     volumes:
       - ./certs/:/app/certs/:ro
     read_only: true

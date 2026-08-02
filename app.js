@@ -95,13 +95,24 @@ const wsfedRouter = require('./routes/wsfed');
     }
     app.set("TRUST_PROXY", trustProxyHops);
     app.set('trust proxy', trustProxyHops);
-    app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));
+    try {
+        app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));
+    } catch (err) {
+        console.error(`FATAL: ${err.message}`);
+        process.exit(1);
+    }
     app.set("SESSION_MAX_STORE", parseInt(process.env.SESSION_MAX_STORE || "500", 10));
     app.set("SAML2_WANT_ASSERTIONS_SIGNED", (process.env.SAML2_WANT_ASSERTIONS_SIGNED || "true").toLowerCase() !== "false");
     app.set("SAML2_WANT_AUTHN_RESPONSE_SIGNED", (process.env.SAML2_WANT_AUTHN_RESPONSE_SIGNED || "true").toLowerCase() !== "false");
     // audience the IdP must scope the assertion to; defaults to the SP entity ID
     app.set("SAML2_AUDIENCE", process.env.SAML2_AUDIENCE || app.get("SAML2_ISSUER"));
     app.set("SAML2_CLOCK_SKEW_MS", Number.parseInt(process.env.SAML2_CLOCK_SKEW_MS || "3000", 10));
+
+    // empty matches nothing — refuse to start rather than 403 every sign-in
+    if (app.get("WSFED_ALLOWED_REALMS").length === 0) {
+        console.error('FATAL: WSFED_ALLOWED_REALMS is empty. Set it to a comma-separated list of the realm URLs allowed to receive tokens, e.g. "https://exchange.corp".');
+        process.exit(1);
+    }
 
     if (process.env.NODE_ENV === 'production') {
         const issuer = app.get("WSFED_ISSUER");

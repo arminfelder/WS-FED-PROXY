@@ -19,23 +19,38 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * Parses a comma-separated list of allowed realm URLs into an array of origins.
  * Returns an empty array if the input is falsy or empty.
  *
+ * Non-http(s) schemes are rejected: their origin serialises to the opaque
+ * "null", which would match any other opaque-origin input.
+ *
  * @param {string} raw - Comma-separated realm URLs from WSFED_ALLOWED_REALMS
  * @returns {string[]} Array of lowercase origin strings (e.g. ["https://exchange.corp"])
+ * @throws {Error} if an entry is not a valid absolute http(s) URL
  */
 function parseAllowedRealms(raw) {
     if (!raw || !raw.trim()) return [];
     return raw.split(',')
         .map(r => r.trim())
         .filter(Boolean)
-        .map(r => new URL(r).origin.toLowerCase());
+        .map(r => {
+            let url;
+            try {
+                url = new URL(r);
+            } catch {
+                throw new Error(`WSFED_ALLOWED_REALMS: "${r}" is not a valid absolute URL`);
+            }
+            if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+                throw new Error(`WSFED_ALLOWED_REALMS: "${r}" must use http or https`);
+            }
+            return url.origin.toLowerCase();
+        });
 }
 
 /**
  * Checks whether wtrealm is permitted.
  *
- * If allowedOrigins is empty the check is skipped (open by default, relying on
- * the IDP to enforce audience restrictions). When allowedOrigins is configured
- * every wtrealm must appear in the list.
+ * Fails closed: an empty list matches nothing. The IDP cannot substitute for
+ * this check — the audience of the issued token *is* wtrealm, and the IDP
+ * never sees it.
  *
  * @param {string} wtrealm
  * @param {string[]} allowedOrigins - from parseAllowedRealms()
@@ -43,7 +58,7 @@ function parseAllowedRealms(raw) {
  */
 function isRealmAllowed(wtrealm, allowedOrigins) {
     if (!wtrealm) return false;
-    if (allowedOrigins.length === 0) return true;
+    if (!allowedOrigins || allowedOrigins.length === 0) return false;
     try {
         const origin = new URL(wtrealm).origin.toLowerCase();
         return allowedOrigins.includes(origin);
@@ -55,11 +70,12 @@ function isRealmAllowed(wtrealm, allowedOrigins) {
 /**
  * Checks whether wreply is permitted.
  *
- * Rules (applied in order):
- *  1. If wreply is absent it is always valid (caller will fall back to wtrealm).
- *  2. wreply must be a valid absolute URL.
- *  3. If allowedOrigins is configured, wreply's origin must be in the list.
- *  4. Otherwise wreply's origin must equal wtrealm's origin (same-origin fallback).
+ * An absent wreply is valid — the caller falls back to wtrealm, which
+ * isRealmAllowed() has already checked. Otherwise wreply's origin must appear
+ * in allowedOrigins.
+ *
+ * No same-origin-to-wtrealm fallback: both arrive in the same request from the
+ * same caller, so comparing them to each other constrains nothing.
  *
  * @param {string|undefined} wreply
  * @param {string} wtrealm
@@ -68,14 +84,10 @@ function isRealmAllowed(wtrealm, allowedOrigins) {
  */
 function isWreplyAllowed(wreply, wtrealm, allowedOrigins) {
     if (!wreply) return true;
+    if (!allowedOrigins || allowedOrigins.length === 0) return false;
     try {
         const wreplyOrigin = new URL(wreply).origin.toLowerCase();
-        if (allowedOrigins.length > 0) {
-            return allowedOrigins.includes(wreplyOrigin);
-        }
-        // Fallback: wreply must share the origin of wtrealm
-        const wtrealmOrigin = new URL(wtrealm).origin.toLowerCase();
-        return wreplyOrigin === wtrealmOrigin;
+        return allowedOrigins.includes(wreplyOrigin);
     } catch {
         return false;
     }

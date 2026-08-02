@@ -21,7 +21,8 @@ const { parseAllowedRealms } = require('../../../util/validateRedirect');
  * @param {string}   [opts.WSFED_KEY='exchange.key']
  * @param {string}   [opts.WSFED_PKCS7='exchange.p7b']
  * @param {string}   [opts.INVALID_LOGIN_REDIRECT='']
- * @param {string}   [opts.WSFED_ALLOWED_REALMS='']  comma-separated
+ * @param {string}   [opts.WSFED_ALLOWED_REALMS='https://exchange.corp']  comma-separated;
+ *                   defaults populated because an empty list rejects everything
  * @param {boolean}  [opts.authenticated=false]  pre-populate session with a user
  * @param {object}   [opts.sessionWsfedArgs]  pre-populate wsfed_args in session
  */
@@ -35,7 +36,9 @@ function buildApp(opts = {}) {
     app.set('WSFED_KEY', opts.WSFED_KEY || 'exchange.key');
     app.set('WSFED_PKCS7', opts.WSFED_PKCS7 || 'exchange.p7b');
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
-    app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(opts.WSFED_ALLOWED_REALMS || ''));
+    app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(
+        opts.WSFED_ALLOWED_REALMS !== undefined ? opts.WSFED_ALLOWED_REALMS : 'https://exchange.corp'
+    ));
 
     // same order as app.js: hppPrevent must run after the body parsers
     app.use(express.urlencoded({ extended: false }));

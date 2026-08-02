@@ -31,7 +31,7 @@ All configuration is done via environment variables.
 | `WSFED_PKCS7` | `exchange.p7b` | Filename of the signing certificate in PKCS#7 format, relative to `certs/`. Used by the ADFS SOAP metadata endpoint. |
 | `WSFED_ROOT` | `/wsfed` | URL path prefix for WS-Fed endpoints |
 | `WSFED_TOKEN_LIFETIME` | `600` | Lifetime in seconds of the issued WS-Fed token. This is the only credential that outlives the session (destroyed as soon as the token is issued), so it is deliberately short. |
-| `WSFED_ALLOWED_REALMS` | — | Comma-separated list of allowed `wtrealm` URLs (e.g. `https://exchange.corp/owa/,https://exchange.corp/ecp/`). When set, any `wtrealm` or `wreply` whose origin is not in this list is rejected with `403`. When unset, `wreply` must share the same origin as `wtrealm` (same-origin fallback). |
+| `WSFED_ALLOWED_REALMS` | — | **Required.** Comma-separated list of allowed `wtrealm` URLs (e.g. `https://exchange.corp/owa/,https://exchange.corp/ecp/`). Any `wtrealm` or `wreply` whose origin is not in this list is rejected with `403`. Only the origin (scheme, host, port) is compared — the path is ignored. The app **refuses to start** when this is empty: it is the only control over where the signed token is delivered, and there is no safe default. |
 
 ### SAML2
 

@@ -26,13 +26,24 @@ describe('parseAllowedRealms', () => {
     test('ignores blank entries', () => {
         expect(parseAllowedRealms('https://a.com,,https://b.com')).toEqual(['https://a.com', 'https://b.com']);
     });
+
+    test('throws a descriptive error on a malformed entry', () => {
+        expect(() => parseAllowedRealms('https://a.com,not-a-url'))
+            .toThrow(/not a valid absolute URL/);
+    });
+
+    test('rejects non-http(s) schemes', () => {
+        expect(() => parseAllowedRealms('foo://bar')).toThrow(/must use http or https/);
+    });
 });
 
 describe('isRealmAllowed', () => {
     const allowedOrigins = ['https://exchange.corp', 'https://mail.example.com'];
 
-    test('allows any realm when allowedOrigins is empty', () => {
-        expect(isRealmAllowed('https://anything.com', [])).toBe(true);
+    test('blocks every realm when allowedOrigins is empty (fails closed)', () => {
+        expect(isRealmAllowed('https://anything.com', [])).toBe(false);
+        expect(isRealmAllowed('https://exchange.corp/owa', [])).toBe(false);
+        expect(isRealmAllowed('https://anything.com', undefined)).toBe(false);
     });
 
     test('allows a realm whose origin is in the list', () => {
@@ -77,13 +88,20 @@ describe('isWreplyAllowed', () => {
         expect(isWreplyAllowed('https://evil.corp/steal', 'https://exchange.corp/owa', allowedOrigins)).toBe(false);
     });
 
-    describe('same-origin fallback (no allowedOrigins configured)', () => {
-        test('allows wreply sharing the wtrealm origin', () => {
-            expect(isWreplyAllowed('https://exchange.corp/reply', 'https://exchange.corp/owa', [])).toBe(true);
+    describe('no same-origin fallback (empty allowedOrigins fails closed)', () => {
+        test('blocks wreply sharing the wtrealm origin when nothing is allowlisted', () => {
+            // both values come from the same caller, so matching them against
+            // each other constrains nothing
+            expect(isWreplyAllowed('https://attacker.tld/steal', 'https://attacker.tld', [])).toBe(false);
+            expect(isWreplyAllowed('https://exchange.corp/reply', 'https://exchange.corp/owa', [])).toBe(false);
         });
 
         test('blocks wreply with a different origin than wtrealm', () => {
             expect(isWreplyAllowed('https://attacker.com/steal', 'https://exchange.corp/owa', [])).toBe(false);
+        });
+
+        test('still allows an absent wreply (caller falls back to the checked wtrealm)', () => {
+            expect(isWreplyAllowed(undefined, 'https://exchange.corp', [])).toBe(true);
         });
     });
 
