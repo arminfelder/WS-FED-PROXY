@@ -33,6 +33,7 @@ const helmet = require('helmet');
 const { hppPrevent } = require('hpp-prevent');
 const rateLimit = require('express-rate-limit');
 const { parseAllowedRealms } = require('./util/validateRedirect');
+const { parseTrustProxy } = require('./util/parseTrustProxy');
 
 const app = express();
 
@@ -84,7 +85,16 @@ const wsfedRouter = require('./routes/wsfed');
     // seconds; the only credential outliving the session, so keep it short
     app.set("WSFED_TOKEN_LIFETIME", Number.parseInt(process.env.WSFED_TOKEN_LIFETIME || "600", 10));
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
-    app.set("TRUST_PROXY", (process.env.TRUST_PROXY || "false").toLowerCase() === "true" );
+    // reverse-proxy hop count, not a boolean; 0 trusts nothing
+    let trustProxyHops;
+    try {
+        trustProxyHops = parseTrustProxy(process.env.TRUST_PROXY);
+    } catch (err) {
+        console.error(`FATAL: ${err.message}`);
+        process.exit(1);
+    }
+    app.set("TRUST_PROXY", trustProxyHops);
+    app.set('trust proxy', trustProxyHops);
     app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));
     app.set("SESSION_MAX_STORE", parseInt(process.env.SESSION_MAX_STORE || "500", 10));
     app.set("SAML2_WANT_ASSERTIONS_SIGNED", (process.env.SAML2_WANT_ASSERTIONS_SIGNED || "true").toLowerCase() !== "false");
@@ -158,7 +168,7 @@ app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(hppPrevent());
 
 app.use(session({
-    proxy: app.get("TRUST_PROXY"),
+    // `proxy` left unset so express-session inherits Express' `trust proxy`
     cookie: {
         maxAge: 600000,
         httpOnly: true,
