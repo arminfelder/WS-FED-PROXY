@@ -209,3 +209,24 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+
+### Secrets — keys, certs and traffic captures
+# These are runtime/dev material and must never be committed. certs/ is
+# volume-mounted in deployment; nothing in it belongs in git.
+*.key
+*.pem
+*.crt
+*.p7b
+*.pfx
+*.gpg
+*.har
+
+# …except the throwaway fixtures the test suite signs with.
+!test/fixtures/test-cert.key
+!test/fixtures/test-cert.pem
+
+certs/*
+!certs/placeholder
+share/
+backup/
+audit.json

@@ -1,9 +1,27 @@
 .idea
+.claude
 .git
 node_modules
 certs
 backup
 share
+e2e
 realm.json
 Dockerfile
 *.md
+
+# Keys, certs and captures that live in the working tree during development.
+# certs/ is mounted at runtime; nothing here belongs in a layer.
+*.key
+*.pem
+*.crt
+*.p7b
+*.har
+*.gpg
+bak
+audit.json
+yarn.lock
+
+# …except the throwaway fixtures the builder's `npm test` stage signs with.
+!test/fixtures/test-cert.key
+!test/fixtures/test-cert.pem
