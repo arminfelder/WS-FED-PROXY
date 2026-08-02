@@ -88,11 +88,23 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));
     app.set("SESSION_MAX_STORE", parseInt(process.env.SESSION_MAX_STORE || "500", 10));
     app.set("SAML2_WANT_ASSERTIONS_SIGNED", (process.env.SAML2_WANT_ASSERTIONS_SIGNED || "true").toLowerCase() !== "false");
+    app.set("SAML2_WANT_AUTHN_RESPONSE_SIGNED", (process.env.SAML2_WANT_AUTHN_RESPONSE_SIGNED || "true").toLowerCase() !== "false");
+    // audience the IdP must scope the assertion to; defaults to the SP entity ID
+    app.set("SAML2_AUDIENCE", process.env.SAML2_AUDIENCE || app.get("SAML2_ISSUER"));
+    app.set("SAML2_CLOCK_SKEW_MS", Number.parseInt(process.env.SAML2_CLOCK_SKEW_MS || "3000", 10));
 
     if (process.env.NODE_ENV === 'production') {
         const issuer = app.get("WSFED_ISSUER");
         if (issuer.includes('localhost')) {
             console.error('FATAL: WSFED_ISSUER contains "localhost" in a production environment. Set WSFED_ISSUER to the public proxy URL.');
+            process.exit(1);
+        }
+        if (!app.get("SAML2_WANT_ASSERTIONS_SIGNED")) {
+            console.error('FATAL: SAML2_WANT_ASSERTIONS_SIGNED is disabled in a production environment. Unsigned assertions must never be accepted.');
+            process.exit(1);
+        }
+        if (!app.get("SAML2_WANT_AUTHN_RESPONSE_SIGNED")) {
+            console.error('FATAL: SAML2_WANT_AUTHN_RESPONSE_SIGNED is disabled in a production environment. Unsigned SAML responses must never be accepted.');
             process.exit(1);
         }
     }
@@ -122,9 +134,6 @@ app.use(function ecsAccessLog(req, res, next) {
   next();
 });
 
-// HTTP Parameter Pollution prevention — must come before body/query parsing is used by routes
-app.use(hppPrevent());
-
 // Rate limiting — tight on the SAML callback (CPU-intensive XML verify), broad elsewhere
 const globalLimiter = rateLimit({
     windowMs: 60 * 1000,
@@ -143,6 +152,10 @@ app.use(app.get("SAML2_ROOT") + '/callback', callbackLimiter);
 
 app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
+
+// HTTP Parameter Pollution prevention — must run after the body parsers, which
+// would otherwise overwrite the req.body it sanitised
+app.use(hppPrevent());
 
 app.use(session({
     proxy: app.get("TRUST_PROXY"),
@@ -211,9 +224,15 @@ passport.use(new SamlStrategy(
       protocol: "https",
       entryPoint: app.get("SAML2_IDP"),
       issuer: app.get("SAML2_ISSUER"),
+      // explicit — node-saml otherwise falls back to `issuer`
+      audience: app.get("SAML2_AUDIENCE"),
       wantAssertionsSigned: app.get("SAML2_WANT_ASSERTIONS_SIGNED"),
+      // pinned so a library default change cannot relax signature enforcement
+      wantAuthnResponseSigned: app.get("SAML2_WANT_AUTHN_RESPONSE_SIGNED"),
       validateInResponseTo: ValidateInResponseTo.always,
       requestIdExpirationPeriodMs: 3600000,
+      // the node-saml default of 0 rejects assertions over any clock drift
+      acceptedClockSkewMs: app.get("SAML2_CLOCK_SKEW_MS"),
       identifierFormat: app.get("SAML2_IDENTIFIER_FORMAT"),
       idpCert: fs.readFileSync(path.join(__dirname, "./certs" ,app.get("SAML2_IDP_PUB_KEY")), { encoding: 'utf8' }), // cert must be provided
     },

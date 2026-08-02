@@ -37,9 +37,10 @@ function buildApp(opts = {}) {
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
     app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(opts.WSFED_ALLOWED_REALMS || ''));
 
-    app.use(hppPrevent());
+    // same order as app.js: hppPrevent must run after the body parsers
     app.use(express.urlencoded({ extended: false }));
     app.use(express.json());
+    app.use(hppPrevent());
 
     app.use(session({
         secret: 'test-secret',

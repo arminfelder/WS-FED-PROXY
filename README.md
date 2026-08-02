@@ -19,7 +19,7 @@ All configuration is done via environment variables.
 | `SESSION_SECRET` | random | Secret used to sign the session cookie. **Must be set to a stable secret in production.** |
 | `SESSION_MAX_STORE` | `500` | Maximum number of concurrent sessions held in memory. Prevents unbounded memory growth. |
 | `INVALID_LOGIN_REDIRECT` | — | URL to redirect to when a request arrives at `/wsfed` with no valid WS-Fed parameters. Returns `400` if unset. |
-| `NODE_ENV` | — | Set to `production` to enable production guards (e.g. fatal startup error if `WSFED_ISSUER` contains `localhost`) |
+| `NODE_ENV` | — | Set to `production` to enable production guards: fatal startup error if `WSFED_ISSUER` contains `localhost`, or if either SAML signature requirement has been disabled. |
 
 ### WS-Federation
 
@@ -45,7 +45,10 @@ All configuration is done via environment variables.
 | `SAML2_CLAIMS_SID` | `sid` | Name of the SAML2 attribute holding the Windows SID |
 | `SAML2_CLAIMS_SID_BASE64` | `true` | Set to `false` if the IdP sends the SID as a plain string rather than base64-encoded binary |
 | `SAML2_ROOT` | `/saml2` | URL path prefix for SAML2 endpoints |
-| `SAML2_WANT_ASSERTIONS_SIGNED` | `true` | Require individual SAML assertions to be signed in addition to the response envelope. Set to `false` only if your IdP signs the response but not individual assertions. |
+| `SAML2_AUDIENCE` | value of `SAML2_ISSUER` | Audience the IdP's assertion must be scoped to. |
+| `SAML2_CLOCK_SKEW_MS` | `3000` | Tolerance for clock drift between the IdP and this proxy when checking assertion validity windows. |
+| `SAML2_WANT_ASSERTIONS_SIGNED` | `true` | Require individual SAML assertions to be signed in addition to the response envelope. Set to `false` only if your IdP signs the response but not individual assertions. Cannot be disabled when `NODE_ENV=production`. |
+| `SAML2_WANT_AUTHN_RESPONSE_SIGNED` | `true` | Require the SAML response envelope itself to be signed. Cannot be disabled when `NODE_ENV=production`. |
 
 ## Endpoints
 
