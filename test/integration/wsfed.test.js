@@ -2,8 +2,15 @@ const request = require('supertest');
 
 // Mock wsfed and fs so route tests don't need real certs
 jest.mock('wsfed', () => {
-    const auth = jest.fn(() => (req, res, next) => {
-        // Simulate wsfed generating a token page
+    const auth = jest.fn((opts) => (req, res, next) => {
+        // mirror the real library: resolve via getPostURL, then respond
+        // synchronously from that callback
+        if (opts && typeof opts.getPostURL === 'function') {
+            return opts.getPostURL(req.query.wtrealm, req.query.wreply, req, (err, postUrl) => {
+                if (err) { return next(err); }
+                res.status(200).send(`<html><body><form action="${postUrl}">token-issued</form></body></html>`);
+            });
+        }
         res.status(200).send('<html><body>token-issued</body></html>');
     });
     const metadata = jest.fn(() => (req, res) => {
@@ -178,6 +185,58 @@ describe('GET /wsfed — wreply open-redirect prevention', () => {
             });
         expect(res.status).toBe(302);
         expect(res.headers.location).toMatch('/saml2/login');
+    });
+});
+
+describe('GET /wsfed — token issuance on the authenticated return path', () => {
+    const REALMS = 'https://exchange.corp';
+    const ARGS = { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa', wreply: 'https://exchange.corp/auth/cb' };
+
+    test('issues the token and clears the session cookie on the same response', async () => {
+        const app = buildApp({ authenticated: true, sessionWsfedArgs: ARGS, WSFED_ALLOWED_REALMS: REALMS });
+        const res = await request(app).get('/wsfed');
+
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('token-issued');
+        // must be cleared on the response carrying the token, not after it is sent
+        expect(String(res.headers['set-cookie'])).toMatch(/connect\.sid=;/);
+    });
+
+    test('posts the token to wreply', async () => {
+        const app = buildApp({ authenticated: true, sessionWsfedArgs: ARGS, WSFED_ALLOWED_REALMS: REALMS });
+        const res = await request(app).get('/wsfed');
+        expect(res.text).toContain(`action="${ARGS.wreply}"`);
+    });
+
+    test('falls back to wtrealm when wreply is an empty string', async () => {
+        const app = buildApp({
+            authenticated: true,
+            sessionWsfedArgs: { ...ARGS, wreply: '' },
+            WSFED_ALLOWED_REALMS: REALMS,
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(200);
+        expect(res.text).toContain(`action="${ARGS.wtrealm}"`);
+    });
+
+    test('rejects a tampered wreply replayed from the session', async () => {
+        const app = buildApp({
+            authenticated: true,
+            sessionWsfedArgs: { ...ARGS, wreply: 'https://attacker.tld/collect' },
+            WSFED_ALLOWED_REALMS: REALMS,
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(403);
+    });
+
+    test('rejects a tampered wtrealm replayed from the session', async () => {
+        const app = buildApp({
+            authenticated: true,
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://attacker.tld' },
+            WSFED_ALLOWED_REALMS: REALMS,
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(403);
     });
 });
 

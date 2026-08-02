@@ -48,10 +48,13 @@ function buildApp(opts = {}) {
         cookie: { secure: false },
     }));
 
-    // Stub passport so we can control isAuthenticated() without a real SAML strategy
+    // Stub passport so we can control isAuthenticated() without a real SAML strategy.
+    // isAuthenticated/logout mirror what passport.initialize() provides in app.js.
+    let authenticated = !!opts.authenticated;
     app.use((req, res, next) => {
-        req.isAuthenticated = () => !!opts.authenticated;
-        if (opts.authenticated) {
+        req.isAuthenticated = () => authenticated;
+        req.logout = (cb) => { authenticated = false; delete req.user; cb(); };
+        if (authenticated) {
             req.user = { id: 'testuser', upn: 'testuser@example.com', sid: 'S-1-5-21-1' };
         }
         if (opts.sessionWsfedArgs) {

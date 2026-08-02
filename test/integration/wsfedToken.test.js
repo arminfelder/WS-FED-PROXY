@@ -26,6 +26,8 @@ const ISSUER   = 'https://proxy.example.com/wsfed';
 const WTREALM  = 'https://exchange.corp/owa/';
 const WREPLY   = 'https://exchange.corp/owa/auth/wsfed';
 const WCTX     = 'rm=0&id=passive&ru=%2fowa%2f';
+// Mirrors the WSFED_TOKEN_LIFETIME default in app.js.
+const TOKEN_LIFETIME = 600;
 const TEST_USER = {
     id:  'jdoe@corp.example',
     upn: 'jdoe@corp.example',
@@ -45,6 +47,7 @@ function buildTokenApp(opts = {}) {
             issuer:        opts.issuer || ISSUER,
             cert:          opts.cert   || CERT,
             key:           opts.key    || KEY,
+            lifetime:      opts.lifetime || TOKEN_LIFETIME,
             profileMapper: profileMapper,
             getPostURL: (_wtrealm, wreply, _req, cb) => {
                 cb(null, wreply || _wtrealm);
@@ -197,6 +200,13 @@ describe('WS-Fed token — full round-trip (no OWA needed)', () => {
         const conditions = assertionDoc.documentElement.getElementsByTagName('saml:Conditions')[0];
         expect(conditions.getAttribute('NotBefore')).toBeTruthy();
         expect(conditions.getAttribute('NotOnOrAfter')).toBeTruthy();
+    });
+
+    test('token lifetime is capped at WSFED_TOKEN_LIFETIME, not the 8h library default', () => {
+        const conditions = assertionDoc.documentElement.getElementsByTagName('saml:Conditions')[0];
+        const notBefore   = Date.parse(conditions.getAttribute('NotBefore'));
+        const notOnOrAfter = Date.parse(conditions.getAttribute('NotOnOrAfter'));
+        expect(Math.round((notOnOrAfter - notBefore) / 1000)).toBe(TOKEN_LIFETIME);
     });
 });
 

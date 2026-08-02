@@ -22,14 +22,8 @@ const fs = require("fs");
 const path = require("path");
 const profileMapper = require("../util/OWAProfileMapper");
 const { isRealmAllowed, isWreplyAllowed } = require("../util/validateRedirect");
-const { formatError } = require("@elastic/ecs-helpers");
+const { logError } = require("../util/logError");
 const router = express.Router();
-
-function logError(msg, err) {
-    const rec = { '@timestamp': new Date().toISOString(), 'log.level': 'error', message: msg, 'ecs.version': '1.6.0' };
-    formatError(rec, err);
-    process.stdout.write(JSON.stringify(rec) + '\n');
-}
 
 const certsDir = path.join(__dirname, '../certs');
 let _cert, _key, _pkcs7;
@@ -46,16 +40,19 @@ function getCerts(app) {
 
 router.get('/',(req,res,next)=>{
     if("wa" in req.query && req.query.wa === "wsignout1.0") { // user requests a logout
+        // CSRF guard for /saml2/logout, which refuses to run without this flag
+        req.session.logout_pending = true;
         res.redirect(req.app.get("SAML2_ROOT") + "/logout");
     }else if(req.isAuthenticated() && "wsfed_args" in req.session){ // user has been authenticated and his session contains the required arguments for WSFED to proceed
-        // Re-validate wtrealm against the whitelist — guards against session tampering
-        // and whitelist changes between initial request and callback.
-        // wreply was already validated on entry and is not re-checked here to avoid
-        // breaking same-origin fallback for deployments without WSFED_ALLOWED_REALMS.
+        // re-validate: the allowlist may have changed since entry, and wreply
+        // is what getPostURL() below hands the signed token to
         const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
         const args = req.session.wsfed_args;
         if (!isRealmAllowed(args.wtrealm, allowedOrigins)) {
             return next(createError(403, `wtrealm not in allowlist: ${args.wtrealm}`));
+        }
+        if (!isWreplyAllowed(args.wreply, args.wtrealm, allowedOrigins)) {
+            return next(createError(403, `wreply origin not allowed: ${args.wreply}`));
         }
         req.query = args;
         next();
@@ -71,7 +68,8 @@ router.get('/',(req,res,next)=>{
         sessData.wsfed_args = Object.assign({},req.query);
         req.session.save();
         res.redirect(req.app.get("SAML2_ROOT") + "/login");
-    }else if(req.isAuthenticated()) { // user is authenticated, but now valid session data is present, destroy the session as it is not valid
+    }else if(req.isAuthenticated()) { // user is authenticated, but no valid session data is present, destroy the session as it is not valid
+        req.session.logout_pending = true;
         res.redirect(req.app.get("SAML2_ROOT") + "/logout");
     }else { // user is neither authenticated nor does he present valid WSFED arguments
         if (req.app.get("INVALID_LOGIN_REDIRECT") !== ""){
@@ -86,22 +84,21 @@ router.get('/',(req,res,next)=>{
     issuer:     req.app.get("WSFED_ISSUER"),
     cert,
     key,
+    // explicit — the library defaults to 8 hours
+    lifetime:   req.app.get("WSFED_TOKEN_LIFETIME"),
     profileMapper: profileMapper,
     getPostURL: function (wtrealm, wreply, req, callback) {
-        // immediately destroy the session data
+        // empty wreply falls back to wtrealm, already checked against the allowlist
+        const redirectUrl = wreply || wtrealm;
+        // callback() must fire inside destroy(): wsfed sends the response
+        // synchronously from it, so clearCookie afterwards would be too late
         req.session.destroy(function (err){
             if(err){
-                logError('session destroy failed', err)
+                logError('session destroy failed', err, { 'http.request.id': req.requestId })
             }
             res.clearCookie("connect.sid")
+            return callback(null, redirectUrl)
         });
-        let redirectUrl = ""
-        if(wreply === undefined) {
-            redirectUrl = wtrealm;
-        }else{
-            redirectUrl = wreply;
-        }
-        return callback(null, redirectUrl)
     }
 })(req,res,next)
 });
