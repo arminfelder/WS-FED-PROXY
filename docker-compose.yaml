@@ -15,10 +15,19 @@ services:
       WSFED_ROOT: /wsfed
     volumes:
       - ./certs/:/app/certs/:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Loopback-only: nginx reaches the app over the compose network, so there is
+    # no reason to expose the plaintext port to the LAN and bypass TLS.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
   nginx:
-    image: nginx:1.24.0
+    image: nginx:1.30.4
+    depends_on:
+      - proxy
     ports:
       - "443:443"
     volumes:
