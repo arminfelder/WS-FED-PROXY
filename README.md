@@ -15,7 +15,7 @@ All configuration is done via environment variables.
 | `HTTPS_KEY` | `../selfsigned.key` | Path to the TLS private key (relative to `bin/`) |
 | `HTTPS_CERT` | `../selfsigned.crt` | Path to the TLS certificate (relative to `bin/`) |
 | `PORT` | `3000` | Listening port |
-| `TRUST_PROXY` | `false` | Set to `true` when running behind a reverse proxy (sets `X-Forwarded-*` trust) |
+| `TRUST_PROXY` | `0` | **Number of reverse-proxy hops** in front of the app. Drives Express' `trust proxy`, so `req.ip`, the rate limiters and the secure-cookie check read the real client. `0` trusts nothing; use `1` behind a single nginx. The legacy values `true`/`false` are still accepted and mean `1`/`0`. The proxy must send `X-Forwarded-For` — otherwise every request appears to come from the proxy and the per-client rate limits collapse into one shared bucket. |
 | `SESSION_SECRET` | random | Secret used to sign the session cookie. **Must be set to a stable secret in production.** |
 | `SESSION_MAX_STORE` | `500` | Maximum number of concurrent sessions held in memory. Prevents unbounded memory growth. |
 | `INVALID_LOGIN_REDIRECT` | — | URL to redirect to when a request arrives at `/wsfed` with no valid WS-Fed parameters. Returns `400` if unset. |
