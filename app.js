@@ -81,6 +81,8 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("WSFED_KEY", process.env.WSFED_KEY || "exchange.key");
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
+    // seconds; the only credential outliving the session, so keep it short
+    app.set("WSFED_TOKEN_LIFETIME", Number.parseInt(process.env.WSFED_TOKEN_LIFETIME || "600", 10));
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
     app.set("TRUST_PROXY", (process.env.TRUST_PROXY || "false").toLowerCase() === "true" );
     app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));

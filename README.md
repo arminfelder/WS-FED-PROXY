@@ -30,6 +30,7 @@ All configuration is done via environment variables.
 | `WSFED_KEY` | `exchange.key` | Filename of the signing private key (PEM), relative to `certs/` |
 | `WSFED_PKCS7` | `exchange.p7b` | Filename of the signing certificate in PKCS#7 format, relative to `certs/`. Used by the ADFS SOAP metadata endpoint. |
 | `WSFED_ROOT` | `/wsfed` | URL path prefix for WS-Fed endpoints |
+| `WSFED_TOKEN_LIFETIME` | `600` | Lifetime in seconds of the issued WS-Fed token. This is the only credential that outlives the session (destroyed as soon as the token is issued), so it is deliberately short. |
 | `WSFED_ALLOWED_REALMS` | — | Comma-separated list of allowed `wtrealm` URLs (e.g. `https://exchange.corp/owa/,https://exchange.corp/ecp/`). When set, any `wtrealm` or `wreply` whose origin is not in this list is rejected with `403`. When unset, `wreply` must share the same origin as `wtrealm` (same-origin fallback). |
 
 ### SAML2
@@ -55,7 +56,7 @@ All configuration is done via environment variables.
 | `{WSFED_ROOT}/adfs/fs/federationserverservice.asmx` | ADFS SOAP endpoint (returns signing cert thumbprint to Exchange) |
 | `{SAML2_ROOT}/login` | Initiates SAML2 authentication |
 | `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding) |
-| `{SAML2_ROOT}/logout` | Initiates SAML2 logout |
+| `{SAML2_ROOT}/logout` | Initiates SAML2 logout. Reachable only via `{WSFED_ROOT}?wa=wsignout1.0`, which sets a single-use session flag; a direct or cross-origin request returns `403` so a third-party page cannot force a single logout. |
 
 ## Logging
 
