@@ -83,6 +83,17 @@ describe('token response form (WS-Federation 1.2 §13.6.2)', () => {
         expect(res.text).not.toContain('injected');
     });
 
+    test('an empty stored wctx stays empty: a wctx in the return query does not reach Context', async () => {
+        // the library uses `options.wctx || req.query.wctx`, so "" falls through to the query
+        const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM, wctx: '' }, { wctx: 'injected' });
+        expect(res.status).toBe(200);
+        expect(res.text).not.toContain('injected');
+        expect(hiddenInput(res.text, 'wctx')).toBe('');
+        const wresult = hiddenInput(res.text, 'wresult');
+        expect(wresult).toMatch(/^<t:RequestSecurityTokenResponse Context="" xmlns:t=/);
+        expect(verifySignature(wresult)).toBe(true);
+    });
+
     test('the form submits without eval', async () => {
         const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM });
         expect(res.text).toContain('document.forms[0].submit();');

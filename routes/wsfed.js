@@ -52,6 +52,11 @@ function readWsfedParams(query) {
     return params;
 }
 
+// same escaping as the wsfed library uses for Context (wsfed/lib/utils.js)
+function escapeAttribute(value) {
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // 1x1 transparent GIF. RPs and browsers load wsignoutcleanup1.0 URLs as images.
 const CLEANUP_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 
@@ -144,12 +149,12 @@ router.get('/',(req,res,next)=>{
     wctx:       args.wctx,
     profileMapper: profileMapper,
     responseHandler: function (res, postUrl, _wctx, wresult) {
-        // _wctx can come from the query of this request. Only the stored wctx is the RP value.
-        // The library writes Context="undefined" when there is no wctx (WS-Federation 1.2 §13.6.2).
+        // The library takes Context from `options.wctx || req.query.wctx`, so an empty or absent
+        // wctx falls through to the query of this request. Only the stored wctx is the RP value
+        // (WS-Federation 1.2 §13.6.2), so Context is written again from it.
         // Context is outside the signed assertion, so the signature stays valid.
-        if (args.wctx === undefined) {
-            wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, '<t:RequestSecurityTokenResponse ');
-        }
+        const context = args.wctx === undefined ? '' : `Context="${escapeAttribute(args.wctx)}" `;
+        wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, `<t:RequestSecurityTokenResponse ${context}`);
         res.render('wsfed-form', { callback: postUrl, wresult, wctx: args.wctx });
     },
     getPostURL: function (_wtrealm, _wreply, req, callback) {
