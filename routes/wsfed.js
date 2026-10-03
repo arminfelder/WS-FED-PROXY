@@ -52,16 +52,50 @@ function readWsfedParams(query) {
     return params;
 }
 
-router.get('/',(req,res,next)=>{
-    const query = readWsfedParams(req.query);
-    if (query === null) {
-        return next(createError(400, 'repeated or malformed WS-Fed parameter'));
+// 1x1 transparent GIF. RPs and browsers load wsignoutcleanup1.0 URLs as images.
+const CLEANUP_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+
+function signOut(req, res) {
+    // CSRF guard for /saml2/logout, which refuses to run without this flag
+    req.session.logout_pending = true;
+    res.redirect(req.app.get("SAML2_ROOT") + "/logout");
+}
+
+// WS-Federation 1.2 §13.2.4.2: remove local state only. Do not contact the IdP.
+function signOutCleanup(req, res, next, query) {
+    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    if (query.wreply !== undefined && !isWreplyAllowed(query.wreply, undefined, allowedOrigins)) {
+        return next(createError(403, `wreply origin not allowed: ${query.wreply}`));
     }
-    if(query.wa === "wsignout1.0") { // user requests a logout
-        // CSRF guard for /saml2/logout, which refuses to run without this flag
-        req.session.logout_pending = true;
-        res.redirect(req.app.get("SAML2_ROOT") + "/logout");
-    }else if(req.isAuthenticated() && "wsfed_args" in req.session){ // user has been authenticated and his session contains the required arguments for WSFED to proceed
+    req.session.destroy(function (err) {
+        if (err) { logError('session destroy failed', err, { 'http.request.id': req.requestId }); }
+        res.clearCookie("connect.sid");
+        res.set('Cache-Control', 'no-store');
+        if (query.wreply) { return res.redirect(query.wreply); }
+        res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+        res.type('gif').send(CLEANUP_GIF);
+    });
+}
+
+function signIn(req, res, next, query) {
+    if (query.wtrealm === undefined) {
+        return next(createError(400, 'wtrealm is required for wsignin1.0'));
+    }
+    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    if (!isRealmAllowed(query.wtrealm, allowedOrigins)) {
+        return next(createError(403, `wtrealm not in allowlist: ${query.wtrealm}`));
+    }
+    if (!isWreplyAllowed(query.wreply, query.wtrealm, allowedOrigins)) {
+        return next(createError(403, `wreply origin not allowed: ${query.wreply}`));
+    }
+    req.session.wsfed_args = query;
+    req.session.save();
+    res.redirect(req.app.get("SAML2_ROOT") + "/login");
+}
+
+// No wa: the return from /saml2/callback, which redirects to the bare WSFED_ROOT.
+function continueSignIn(req, res, next) {
+    if (req.isAuthenticated() && "wsfed_args" in req.session) {
         // re-validate: the allowlist may have changed since entry, and wreply
         // is what getPostURL() below hands the signed token to
         const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
@@ -73,27 +107,29 @@ router.get('/',(req,res,next)=>{
             return next(createError(403, `wreply origin not allowed: ${args.wreply}`));
         }
         res.locals.wsfedArgs = args;
-        next();
-    }else if (query.wa !== undefined && query.wtrealm !== undefined){   // user is not logged in and requests a login
-        const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
-        if (!isRealmAllowed(query.wtrealm, allowedOrigins)) {
-            return next(createError(403, `wtrealm not in allowlist: ${query.wtrealm}`));
-        }
-        if (!isWreplyAllowed(query.wreply, query.wtrealm, allowedOrigins)) {
-            return next(createError(403, `wreply origin not allowed: ${query.wreply}`));
-        }
-        req.session.wsfed_args = query;
-        req.session.save();
-        res.redirect(req.app.get("SAML2_ROOT") + "/login");
-    }else if(req.isAuthenticated()) { // user is authenticated, but no valid session data is present, destroy the session as it is not valid
-        req.session.logout_pending = true;
-        res.redirect(req.app.get("SAML2_ROOT") + "/logout");
-    }else { // user is neither authenticated nor does he present valid WSFED arguments
-        if (req.app.get("INVALID_LOGIN_REDIRECT") !== ""){
-            res.redirect(303, req.app.get("INVALID_LOGIN_REDIRECT"))
-        }else{
-            next(createError(400, 'missing or invalid WS-Fed parameters (wa, wtrealm)'))
-        }
+        return next();
+    }
+    if (req.isAuthenticated()) { // authenticated without pending WS-Fed arguments: the session is not usable
+        return signOut(req, res);
+    }
+    if (req.app.get("INVALID_LOGIN_REDIRECT") !== "") {
+        return res.redirect(303, req.app.get("INVALID_LOGIN_REDIRECT"));
+    }
+    next(createError(400, 'missing or invalid WS-Fed parameters (wa, wtrealm)'));
+}
+
+router.get('/',(req,res,next)=>{
+    const query = readWsfedParams(req.query);
+    if (query === null) {
+        return next(createError(400, 'repeated or malformed WS-Fed parameter'));
+    }
+    switch (query.wa) {
+        case "wsignin1.0":         return signIn(req, res, next, query);
+        case "wsignout1.0":        return signOut(req, res);
+        case "wsignoutcleanup1.0": return signOutCleanup(req, res, next, query);
+        case undefined:            return continueSignIn(req, res, next);
+        // WS-Federation 1.2 §17: an unsupported action gets a fault, not a sign-in
+        default:                   return next(createError(400, `unsupported wa: ${query.wa}`));
     }
 },(req,res,next)=>{
     const { cert, key } = getCerts(req.app);
@@ -107,6 +143,15 @@ router.get('/',(req,res,next)=>{
     audience:   args.wtrealm,
     wctx:       args.wctx,
     profileMapper: profileMapper,
+    responseHandler: function (res, postUrl, _wctx, wresult) {
+        // _wctx can come from the query of this request. Only the stored wctx is the RP value.
+        // The library writes Context="undefined" when there is no wctx (WS-Federation 1.2 §13.6.2).
+        // Context is outside the signed assertion, so the signature stays valid.
+        if (args.wctx === undefined) {
+            wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, '<t:RequestSecurityTokenResponse ');
+        }
+        res.render('wsfed-form', { callback: postUrl, wresult, wctx: args.wctx });
+    },
     getPostURL: function (_wtrealm, _wreply, req, callback) {
         // empty wreply falls back to wtrealm, already checked against the allowlist
         const redirectUrl = args.wreply || args.wtrealm;

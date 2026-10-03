@@ -7,6 +7,7 @@
  */
 
 const express = require('express');
+const path = require('path');
 const session = require('express-session');
 const passport = require('passport');
 const { hppPrevent } = require('hpp-prevent');
@@ -27,6 +28,8 @@ const { parseAllowedRealms } = require('../../../util/validateRedirect');
  */
 function buildApp(opts = {}) {
     const app = express();
+    app.set('views', path.join(__dirname, '../../../views'));
+    app.set('view engine', 'pug');
 
     app.set('SAML2_ROOT', opts.SAML2_ROOT || '/saml2');
     app.set('WSFED_ROOT', opts.WSFED_ROOT || '/wsfed');

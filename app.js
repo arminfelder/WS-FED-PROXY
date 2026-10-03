@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const createError = require('http-errors');
 const express = require('express');
+const http = require('http');
 const path = require('path');
 const { formatHttpRequest, formatHttpResponse, formatError } = require('@elastic/ecs-helpers');
 const crypto_internal = require('crypto');
@@ -34,12 +35,13 @@ const { hppPrevent } = require('hpp-prevent');
 const rateLimit = require('express-rate-limit');
 const { parseAllowedRealms } = require('./util/validateRedirect');
 const { parseTrustProxy } = require('./util/parseTrustProxy');
+const { parseIntEnv } = require('./util/parseIntEnv');
 const app = express();
 
 app.use(helmet.contentSecurityPolicy({
     directives: {
         defaultSrc: ["'none'"],
-        scriptSrc:  ["'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc:  ["'unsafe-inline'"],
         // Allow the form POST to any HTTPS target — the allowlist in validateRedirect.js
         // enforces the actual destination; CSP here just blocks non-HTTPS targets.
         formAction: ["https:"],
@@ -81,9 +83,16 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("WSFED_KEY", process.env.WSFED_KEY || "exchange.key");
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
-    // seconds; the only credential outliving the session, so keep it short
-    app.set("WSFED_TOKEN_LIFETIME", Number.parseInt(process.env.WSFED_TOKEN_LIFETIME || "600", 10));
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
+    try {
+        // seconds; the only credential outliving the session, so keep it short
+        app.set("WSFED_TOKEN_LIFETIME", parseIntEnv("WSFED_TOKEN_LIFETIME", process.env.WSFED_TOKEN_LIFETIME, { def: 600, min: 60, max: 3600 }));
+        app.set("SESSION_MAX_STORE", parseIntEnv("SESSION_MAX_STORE", process.env.SESSION_MAX_STORE, { def: 500, min: 1, max: 100000 }));
+        app.set("SAML2_CLOCK_SKEW_MS", parseIntEnv("SAML2_CLOCK_SKEW_MS", process.env.SAML2_CLOCK_SKEW_MS, { def: 3000, min: 0, max: 300000 }));
+    } catch (err) {
+        console.error(`FATAL: ${err.message}`);
+        process.exit(1);
+    }
     // reverse-proxy hop count, not a boolean; 0 trusts nothing
     let trustProxyHops;
     try {
@@ -100,12 +109,10 @@ const wsfedRouter = require('./routes/wsfed');
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
     }
-    app.set("SESSION_MAX_STORE", parseInt(process.env.SESSION_MAX_STORE || "500", 10));
     app.set("SAML2_WANT_ASSERTIONS_SIGNED", (process.env.SAML2_WANT_ASSERTIONS_SIGNED || "true").toLowerCase() !== "false");
     app.set("SAML2_WANT_AUTHN_RESPONSE_SIGNED", (process.env.SAML2_WANT_AUTHN_RESPONSE_SIGNED || "true").toLowerCase() !== "false");
     // audience the IdP must scope the assertion to; defaults to the SP entity ID
     app.set("SAML2_AUDIENCE", process.env.SAML2_AUDIENCE || app.get("SAML2_ISSUER"));
-    app.set("SAML2_CLOCK_SKEW_MS", Number.parseInt(process.env.SAML2_CLOCK_SKEW_MS || "3000", 10));
 
     // empty matches nothing — refuse to start rather than 403 every sign-in
     if (app.get("WSFED_ALLOWED_REALMS").length === 0) {
@@ -231,7 +238,7 @@ app.use(function(err, req, res, next) {
   process.stdout.write(JSON.stringify(rec) + '\n');
   res.status(status);
   res.locals.statusCode = status;
-  res.locals.statusMessage = status === 404 ? 'Not Found' : 'Internal Server Error';
+  res.locals.statusMessage = http.STATUS_CODES[status] || 'Error';
   res.render('error');
 });
 
