@@ -34,7 +34,6 @@ const { hppPrevent } = require('hpp-prevent');
 const rateLimit = require('express-rate-limit');
 const { parseAllowedRealms } = require('./util/validateRedirect');
 const { parseTrustProxy } = require('./util/parseTrustProxy');
-
 const app = express();
 
 app.use(helmet.contentSecurityPolicy({
@@ -49,16 +48,16 @@ app.use(helmet.contentSecurityPolicy({
 app.use(helmet.crossOriginEmbedderPolicy());
 app.use(helmet.crossOriginOpenerPolicy());
 app.use(helmet.crossOriginResourcePolicy());
-app.use(helmet.dnsPrefetchControl());
-app.use(helmet.frameguard());
-app.use(helmet.hidePoweredBy());
-app.use(helmet.hsts());
-app.use(helmet.ieNoOpen());
-app.use(helmet.noSniff());
+app.use(helmet.xDnsPrefetchControl());
+app.use(helmet.xFrameOptions());
+app.use(helmet.xPoweredBy());
+app.use(helmet.strictTransportSecurity());
+app.use(helmet.xDownloadOptions());
+app.use(helmet.xContentTypeOptions());
 app.use(helmet.originAgentCluster());
-app.use(helmet.permittedCrossDomainPolicies());
+app.use(helmet.xPermittedCrossDomainPolicies());
 app.use(helmet.referrerPolicy({ policy: 'origin-when-cross-origin' }));
-app.use(helmet.xssFilter());
+app.use(helmet.xXssProtection());
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -158,13 +157,13 @@ app.use(function ecsAccessLog(req, res, next) {
 // Rate limiting — tight on the SAML callback (CPU-intensive XML verify), broad elsewhere
 const globalLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 60,
+    limit: 60,
     standardHeaders: true,
     legacyHeaders: false,
 });
 const callbackLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 20,
+    limit: 20,
     standardHeaders: true,
     legacyHeaders: false,
 });
