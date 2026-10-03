@@ -36,6 +36,8 @@ const rateLimit = require('express-rate-limit');
 const { parseAllowedRealms } = require('./util/validateRedirect');
 const { parseTrustProxy } = require('./util/parseTrustProxy');
 const { parseIntEnv } = require('./util/parseIntEnv');
+// not exported from the package index
+const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
 
 app.use(helmet.contentSecurityPolicy({
@@ -77,6 +79,8 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("SAML2_CLAIMS_SID", process.env.SAML2_CLAIMS_SID || "sid");
     app.set("SAML2_CLAIMS_SID_BASE64", process.env.SAML2_CLAIMS_SID_BASE64 || "true" )
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
+    // expected <Issuer> of IdP responses; node-saml does not check it when empty
+    app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");
     app.set("SAML2_ROOT", process.env.SAML2_ROOT || "/saml2");
     app.set("WSFED_ISSUER", process.env.WSFED_ISSUER || "https://localhost:3000/wsfed");
     app.set("WSFED_CERT", process.env.WSFED_CERT || "exchange.crt");
@@ -245,8 +249,9 @@ app.use(function(err, req, res, next) {
 
 
 
-passport.use(new SamlStrategy(
-    {
+// The node-saml cache has no size limit. A short TTL with the global rate limit keeps each client to about 900 entries.
+const SAML2_REQUEST_ID_TTL_MS = 15 * 60 * 1000;
+const samlOptions = {
       callbackUrl:  "https://" + new URL(app.get("WSFED_ISSUER")).host + app.get("SAML2_ROOT") + "/callback",
       path: app.get("SAML2_ROOT") + '/callback',
       protocol: "https",
@@ -258,18 +263,34 @@ passport.use(new SamlStrategy(
       // pinned so a library default change cannot relax signature enforcement
       wantAuthnResponseSigned: app.get("SAML2_WANT_AUTHN_RESPONSE_SIGNED"),
       validateInResponseTo: ValidateInResponseTo.always,
-      requestIdExpirationPeriodMs: 3600000,
+      requestIdExpirationPeriodMs: SAML2_REQUEST_ID_TTL_MS,
+      // one instance for both strategies: a saml-force response is checked by the "saml" /callback
+      cacheProvider: new InMemoryCacheProvider({ keyExpirationPeriodMs: SAML2_REQUEST_ID_TTL_MS }),
       // the node-saml default of 0 rejects assertions over any clock drift
       acceptedClockSkewMs: app.get("SAML2_CLOCK_SKEW_MS"),
       identifierFormat: app.get("SAML2_IDENTIFIER_FORMAT"),
       idpCert: fs.readFileSync(path.join(__dirname, "./certs" ,app.get("SAML2_IDP_PUB_KEY")), { encoding: 'utf8' }), // cert must be provided
-    },
-    function(profile, done) {
+};
+if (app.get("SAML2_IDP_ISSUER") !== "") {
+    samlOptions.idpIssuer = app.get("SAML2_IDP_ISSUER");
+}
+
+function samlVerify(profile, done) {
         const user = {};
         user.id = profile["nameID"];
         user.upn = profile[app.get("SAML2_CLAIMS_UPN")];
         user.nameID = profile["nameID"];
         user.nameIDFormat = profile["nameIDFormat"];
+        // node-saml puts these in the IdP LogoutRequest
+        user.nameQualifier = profile.nameQualifier;
+        user.spNameQualifier = profile.spNameQualifier;
+        user.sessionIndex = profile.sessionIndex;
+        // wfresh compares this with the requested maximum age (WS-Federation 1.2 §13.2.2)
+        const assertion = typeof profile.getAssertion === 'function' ? profile.getAssertion() : undefined;
+        const authnStatement = assertion && assertion.Assertion && assertion.Assertion.AuthnStatement;
+        user.authnInstant = authnStatement && authnStatement[0].$ ? authnStatement[0].$.AuthnInstant : undefined;
+        // the issued token must not outlive the IdP session (routes/wsfed.js tokenLifetime)
+        user.sessionNotOnOrAfter = authnStatement && authnStatement[0].$ ? authnStatement[0].$.SessionNotOnOrAfter : undefined;
         if(profile.hasOwnProperty(app.get("SAML2_CLAIMS_SID"))){
             let sid = "";
             if(app.get("SAML2_CLAIMS_SID_BASE64").toLowerCase() === "true"){
@@ -283,15 +304,19 @@ passport.use(new SamlStrategy(
 
 
         return done(null, user);
-    },function (profile, done) {
-        // for logout
+}
+
+function samlLogoutVerify(profile, done) {
         const user = {};
         user.id = profile["nameID"];
         user.nameID = profile["nameID"];
         user.nameIDFormat = profile["nameIDFormat"];
         return done(null, user);
-    })
-);
+}
+
+passport.use(new SamlStrategy(samlOptions, samlVerify, samlLogoutVerify));
+// node-saml reads forceAuthn from the constructor only. Used for wfresh=0.
+passport.use(new SamlStrategy({ ...samlOptions, name: 'saml-force', forceAuthn: true }, samlVerify, samlLogoutVerify));
 
 passport.serializeUser(function(user, done) {
     done(null, user);
