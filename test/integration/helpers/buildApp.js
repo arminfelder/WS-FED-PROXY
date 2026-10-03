@@ -25,6 +25,7 @@ const { parseAllowedRealms } = require('../../../util/validateRedirect');
  *                   defaults populated because an empty list rejects everything
  * @param {boolean}  [opts.authenticated=false]  pre-populate session with a user
  * @param {object}   [opts.sessionWsfedArgs]  pre-populate wsfed_args in session
+ * @param {object}   [opts.user]  req.user when authenticated
  */
 function buildApp(opts = {}) {
     const app = express();
@@ -38,6 +39,8 @@ function buildApp(opts = {}) {
     app.set('WSFED_KEY', opts.WSFED_KEY || 'exchange.key');
     app.set('WSFED_PKCS7', opts.WSFED_PKCS7 || 'exchange.p7b');
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
+    app.set('WSFED_TOKEN_LIFETIME', opts.WSFED_TOKEN_LIFETIME || 600);
+    app.set('SAML2_CLOCK_SKEW_MS', opts.SAML2_CLOCK_SKEW_MS !== undefined ? opts.SAML2_CLOCK_SKEW_MS : 3000);
     app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(
         opts.WSFED_ALLOWED_REALMS !== undefined ? opts.WSFED_ALLOWED_REALMS : 'https://exchange.corp'
     ));
@@ -61,7 +64,7 @@ function buildApp(opts = {}) {
         req.isAuthenticated = () => authenticated;
         req.logout = (cb) => { authenticated = false; delete req.user; cb(); };
         if (authenticated) {
-            req.user = { id: 'testuser', upn: 'testuser@example.com', sid: 'S-1-5-21-1' };
+            req.user = opts.user || { id: 'testuser', upn: 'testuser@example.com', sid: 'S-1-5-21-1' };
         }
         if (opts.sessionWsfedArgs) {
             req.session.wsfed_args = opts.sessionWsfedArgs;

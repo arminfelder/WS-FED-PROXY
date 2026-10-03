@@ -301,6 +301,80 @@ describe('GET /wsfed — wa dispatch (WS-Federation 1.2 §13.2.1, §17)', () => 
     });
 });
 
+describe('GET /wsfed — wfresh (WS-Federation 1.2 §13.2.2)', () => {
+    const REALM = 'https://exchange.corp/owa';
+    const minutesAgo = (m) => new Date(Date.now() - m * 60000).toISOString();
+
+    test.each(['abc', '-1', '1.5', '525601', ''])('refuses wfresh=%p', async (wfresh) => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM, wfresh });
+        expect(res.status).toBe(400);
+    });
+
+    test('accepts a valid wfresh and starts the sign-in', async () => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5' });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toMatch('/saml2/login');
+    });
+
+    test('issues the token when the authentication is fresh enough', async () => {
+        const app = buildApp({
+            authenticated: true,
+            user: { id: 'u', upn: 'u@corp', sid: 'S-1-5-21-1', authnInstant: minutesAgo(1) },
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5' },
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('token-issued');
+    });
+
+    test('asks the IdP again, one time, when the authentication is too old', async () => {
+        const args = { wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5' };
+        const app = buildApp({
+            authenticated: true,
+            user: { id: 'u', upn: 'u@corp', sid: 'S-1-5-21-1', authnInstant: minutesAgo(10) },
+            sessionWsfedArgs: args,
+        });
+        const first = await request(app).get('/wsfed');
+        expect(first.status).toBe(302);
+        expect(first.headers.location).toMatch('/saml2/login');
+        expect(args.reauthRequested).toBe(true);
+
+        const second = await request(app).get('/wsfed');
+        expect(second.status).toBe(403);
+    });
+
+    test('wfresh=0 refuses an authentication from before the request', async () => {
+        const app = buildApp({
+            authenticated: true,
+            user: { id: 'u', upn: 'u@corp', sid: 'S-1-5-21-1', authnInstant: minutesAgo(1) },
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: REALM, wfresh: '0', authRequestedAt: Date.now(), reauthRequested: true },
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(403);
+    });
+
+    test('wfresh=0 accepts an authentication made after the request', async () => {
+        const app = buildApp({
+            authenticated: true,
+            user: { id: 'u', upn: 'u@corp', sid: 'S-1-5-21-1', authnInstant: new Date().toISOString() },
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: REALM, wfresh: '0', authRequestedAt: Date.now() - 1000 },
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(200);
+    });
+
+    test('refuses when the assertion has no AuthnInstant', async () => {
+        const app = buildApp({
+            authenticated: true,
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5' },
+        });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(403);
+    });
+});
+
 describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', () => {
     test('clears the session and returns an uncached cross-origin image', async () => {
         const app = buildApp({ authenticated: true, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa' } });

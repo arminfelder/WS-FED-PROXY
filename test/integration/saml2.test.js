@@ -40,6 +40,22 @@ describe('GET /saml2/login', () => {
     });
 });
 
+describe('GET /saml2/login — strategy for wfresh', () => {
+    const passport = require('passport');
+    const REALM = 'https://exchange.corp/owa';
+
+    test.each([
+        [{ wa: 'wsignin1.0', wtrealm: REALM }, 'saml'],
+        [{ wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5' }, 'saml'],
+        [{ wa: 'wsignin1.0', wtrealm: REALM, wfresh: '0' }, 'saml-force'],
+        [{ wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5', reauthRequested: true }, 'saml-force'],
+    ])('%o uses %s', async (sessionWsfedArgs, strategy) => {
+        passport.authenticate.mockClear();
+        await request(buildApp({ sessionWsfedArgs })).get('/saml2/login');
+        expect(passport.authenticate.mock.calls[0][0]).toBe(strategy);
+    });
+});
+
 describe('GET /saml2/logout', () => {
     test('blocks an authenticated single logout not initiated via wsignout1.0', async () => {
         // the <img src="…/saml2/logout"> case — this is the one worth guarding,

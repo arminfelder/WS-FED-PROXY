@@ -22,7 +22,10 @@ const { logError } = require("../util/logError");
 const router = express.Router();
 
 router.get('/login',function(req, res, next) {
-    passport.authenticate("saml",{
+    const args = req.session.wsfed_args;
+    // ForceAuthn makes the IdP prompt again (WS-Federation 1.2 §13.2.2, wfresh)
+    const strategy = args && (args.wfresh === "0" || args.reauthRequested) ? "saml-force" : "saml";
+    passport.authenticate(strategy,{
         failureRedirect: req.app.get("SAML2_ROOT") + "/failure"
 })(req, res, next)});
 

@@ -44,6 +44,19 @@ describe('error page', () => {
     });
 });
 
+describe('SAML request-ID cache', () => {
+    test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
+        const passport = require('passport');
+        const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
+        const cache = passport._strategy('saml')._saml.options.cacheProvider;
+        expect(cache).toBeInstanceOf(InMemoryCacheProvider);
+        // shared: a response to a saml-force request arrives at the "saml" /callback
+        expect(passport._strategy('saml-force')._saml.options.cacheProvider).toBe(cache);
+        expect(cache.options.keyExpirationPeriodMs).toBe(15 * 60 * 1000);
+        expect(passport._strategy('saml')._saml.options.requestIdExpirationPeriodMs).toBe(15 * 60 * 1000);
+    });
+});
+
 describe('startup config', () => {
     afterEach(() => {
         delete process.env.WSFED_TOKEN_LIFETIME;

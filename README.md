@@ -30,7 +30,7 @@ All configuration is done via environment variables.
 | `WSFED_KEY` | `exchange.key` | Filename of the signing private key (PEM), relative to `certs/` |
 | `WSFED_PKCS7` | `exchange.p7b` | Filename of the signing certificate in PKCS#7 format, relative to `certs/`. Used by the ADFS SOAP metadata endpoint. |
 | `WSFED_ROOT` | `/wsfed` | URL path prefix for WS-Fed endpoints |
-| `WSFED_TOKEN_LIFETIME` | `600` | Lifetime in seconds of the issued WS-Fed token. This is the only credential that outlives the session (destroyed as soon as the token is issued), so it is deliberately short. |
+| `WSFED_TOKEN_LIFETIME` | `600` | Maximum lifetime in seconds of the issued WS-Fed token. This is the only credential that outlives the session (destroyed as soon as the token is issued), so it is deliberately short. The actual lifetime is the smallest of this value, the `wfresh` request parameter (minutes), and the time left until the IdP session ends (`SessionNotOnOrAfter` in the SAML assertion). If the IdP session has ended, or its end time cannot be read, no token is issued (`403`). Every sign-in goes to the IdP; the IdP decides whether to prompt again, except for `wfresh=0`, which sends `ForceAuthn`. |
 | `WSFED_ALLOWED_REALMS` | — | **Required.** Comma-separated list of allowed `wtrealm` URLs (e.g. `https://exchange.corp/owa/,https://exchange.corp/ecp/`). Any `wtrealm` or `wreply` whose origin is not in this list is rejected with `403`. Only the origin (scheme, host, port) is compared — the path is ignored. The app **refuses to start** when this is empty: it is the only control over where the signed token is delivered, and there is no safe default. |
 
 ### SAML2

@@ -39,7 +39,39 @@ function getCerts(app) {
 
 
 
-const WSFED_PARAMS = ['wa', 'wtrealm', 'wreply', 'wctx'];
+const WSFED_PARAMS = ['wa', 'wtrealm', 'wreply', 'wctx', 'wfresh'];
+// one year, in minutes
+const MAX_WFRESH_MINUTES = 525600;
+
+// WS-Federation 1.2 §13.2.2: wfresh is the maximum age of the authentication, in minutes.
+// Returns "ok", "reauth" (ask the IdP again, one time) or "stale".
+function checkFreshness(req, args) {
+    if (args.wfresh === undefined) return "ok";
+    const authnInstant = Date.parse(req.user && req.user.authnInstant);
+    if (Number.isNaN(authnInstant)) return "stale";
+    const notBefore = args.wfresh === "0"
+        ? args.authRequestedAt
+        : Date.now() - Number(args.wfresh) * 60000;
+    if (authnInstant + req.app.get("SAML2_CLOCK_SKEW_MS") >= notBefore) return "ok";
+    return args.reauthRequested ? "stale" : "reauth";
+}
+
+// Seconds. The token must not outlive wfresh (WS-Federation 1.2 §13.2.2) or the IdP session
+// (SessionNotOnOrAfter, SAML 2.0 core §2.7.2). Returns null when less than one second remains:
+// the wsfed library turns a lifetime of 0 into 8 hours, so 0 must never reach it.
+function tokenLifetime(app, args, user) {
+    const limits = [app.get("WSFED_TOKEN_LIFETIME")];
+    const minutes = Number(args.wfresh);
+    // wfresh=0 asks for a new login, not a 0-second token
+    if (args.wfresh !== undefined && minutes > 0) limits.push(minutes * 60);
+    if (user && user.sessionNotOnOrAfter !== undefined) {
+        const sessionEnd = Date.parse(user.sessionNotOnOrAfter);
+        if (Number.isNaN(sessionEnd)) return null;
+        limits.push(Math.floor((sessionEnd - Date.now()) / 1000));
+    }
+    const lifetime = Math.min(...limits);
+    return lifetime >= 1 ? lifetime : null;
+}
 
 // Express 5 parses a repeated key into an array. The allowlist checks need one string for each parameter.
 function readWsfedParams(query) {
@@ -94,7 +126,10 @@ function signIn(req, res, next, query) {
     if (!isWreplyAllowed(query.wreply, query.wtrealm, allowedOrigins)) {
         return next(createError(403, `wreply origin not allowed: ${query.wreply}`));
     }
-    req.session.wsfed_args = query;
+    if (query.wfresh !== undefined && (!/^\d+$/.test(query.wfresh) || Number(query.wfresh) > MAX_WFRESH_MINUTES)) {
+        return next(createError(400, `wfresh must be a whole number of minutes from 0 to ${MAX_WFRESH_MINUTES}`));
+    }
+    req.session.wsfed_args = { ...query, authRequestedAt: Date.now() };
     req.session.save();
     res.redirect(req.app.get("SAML2_ROOT") + "/login");
 }
@@ -112,6 +147,21 @@ function continueSignIn(req, res, next) {
         if (!isWreplyAllowed(args.wreply, args.wtrealm, allowedOrigins)) {
             return next(createError(403, `wreply origin not allowed: ${args.wreply}`));
         }
+        const freshness = checkFreshness(req, args);
+        if (freshness === "reauth") {
+            args.reauthRequested = true;
+            args.authRequestedAt = Date.now();
+            req.session.save();
+            return res.redirect(req.app.get("SAML2_ROOT") + "/login");
+        }
+        if (freshness === "stale") {
+            return next(createError(403, `authentication is older than wfresh=${args.wfresh}`));
+        }
+        const lifetime = tokenLifetime(req.app, args, req.user);
+        if (lifetime === null) {
+            return next(createError(403, 'the IdP session has ended or its end time cannot be read'));
+        }
+        res.locals.tokenLifetime = lifetime;
         res.locals.wsfedArgs = args;
         return next();
     }
@@ -145,7 +195,7 @@ router.get('/',(req,res,next)=>{
     cert,
     key,
     // explicit — the library defaults to 8 hours
-    lifetime:   req.app.get("WSFED_TOKEN_LIFETIME"),
+    lifetime:   res.locals.tokenLifetime,
     audience:   args.wtrealm,
     wctx:       args.wctx,
     profileMapper: profileMapper,
