@@ -41,7 +41,8 @@ const { userFromProfile, ClaimError } = require('./util/samlProfile');
 const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
 
-// Only the auto-submit line in views/wsfed-form.pug runs script; it carries this nonce.
+// The auto-submit line in views/wsfed-form.pug uses this nonce.
+// util/signoutPage.js sets a different policy for the sign-out page.
 app.use(function cspNonce(_req, res, next) {
     res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
     next();
@@ -89,6 +90,13 @@ const wsfedRouter = require('./routes/wsfed');
         process.exit(1);
     }
     app.set("SAML2_CLAIMS_SID_BASE64", sidBase64 === "true");
+    // false: sign-out ends the local session and the RP sessions only. The IdP session stays.
+    const slo = (process.env.SAML2_SLO || "true").trim().toLowerCase();
+    if (slo !== "true" && slo !== "false") {
+        console.error('FATAL: SAML2_SLO must be "true" or "false"');
+        process.exit(1);
+    }
+    app.set("SAML2_SLO", slo === "true");
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
     // expected <Issuer> of IdP responses; node-saml does not check it when empty
     app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");
@@ -99,11 +107,13 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
-    try {
+        try {
         // seconds; the only credential outliving the session, so keep it short
         app.set("WSFED_TOKEN_LIFETIME", parseIntEnv("WSFED_TOKEN_LIFETIME", process.env.WSFED_TOKEN_LIFETIME, { def: 600, min: 60, max: 3600 }));
         app.set("SESSION_MAX_STORE", parseIntEnv("SESSION_MAX_STORE", process.env.SESSION_MAX_STORE, { def: 500, min: 1, max: 100000 }));
         app.set("SAML2_CLOCK_SKEW_MS", parseIntEnv("SAML2_CLOCK_SKEW_MS", process.env.SAML2_CLOCK_SKEW_MS, { def: 3000, min: 0, max: 300000 }));
+        // seconds; how long sign-out can still reach the RPs and the IdP session
+        app.set("WSFED_SSO_RECORD_MAX_AGE", parseIntEnv("WSFED_SSO_RECORD_MAX_AGE", process.env.WSFED_SSO_RECORD_MAX_AGE, { def: 28800, min: 60, max: 604800 }));
     } catch (err) {
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
@@ -197,6 +207,7 @@ const callbackLimiter = rateLimit({
 });
 app.use(globalLimiter);
 app.use(app.get("SAML2_ROOT") + '/callback', callbackLimiter);
+app.use(app.get("SAML2_ROOT") + '/logout/callback', callbackLimiter);
 
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 
@@ -317,6 +328,10 @@ function samlLogoutVerify(profile, done) {
 passport.use(new SamlStrategy(samlOptions, samlVerify, samlLogoutVerify));
 // node-saml reads forceAuthn from the constructor only. Used for wfresh=0.
 passport.use(new SamlStrategy({ ...samlOptions, name: 'saml-force', forceAuthn: true }, samlVerify, samlLogoutVerify));
+// Only for /saml2/logout/callback. For a POSTed message, node-saml reads InResponseTo only from a <Response> root.
+// Thus "always" refuses every POSTed LogoutResponse with "InResponseTo is missing".
+// The signature is still required, and the one-time RelayState binds the reply to our sign-out.
+passport.use(new SamlStrategy({ ...samlOptions, name: 'saml-logout', validateInResponseTo: ValidateInResponseTo.ifPresent }, samlVerify, samlLogoutVerify));
 
 passport.serializeUser(function(user, done) {
     done(null, user);

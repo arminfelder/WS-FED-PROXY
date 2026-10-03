@@ -93,4 +93,25 @@ function isWreplyAllowed(wreply, wtrealm, allowedOrigins) {
     }
 }
 
-module.exports = { parseAllowedRealms, isRealmAllowed, isWreplyAllowed };
+/**
+ * Parses wreply one time and checks its origin.
+ *
+ * Redirect to the returned URL, not to the raw string. Then the browser gets
+ * the same URL that the check saw.
+ *
+ * @param {string} wreply
+ * @param {string[]} allowedOrigins - from parseAllowedRealms()
+ * @returns {URL|null} null if wreply is not an absolute URL or its origin is not allowed
+ */
+function allowedWreplyUrl(wreply, allowedOrigins) {
+    if (typeof wreply !== 'string' || wreply === '') return null;
+    let url;
+    try {
+        url = new URL(wreply);
+    } catch {
+        return null;
+    }
+    return (allowedOrigins || []).includes(url.origin.toLowerCase()) ? url : null;
+}
+
+module.exports = { parseAllowedRealms, isRealmAllowed, isWreplyAllowed, allowedWreplyUrl };

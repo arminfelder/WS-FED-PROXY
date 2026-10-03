@@ -24,6 +24,7 @@ const { SESSION_COOKIE_NAME } = require('../../../util/sessionCookie');
  * @param {string}   [opts.INVALID_LOGIN_REDIRECT='']
  * @param {string}   [opts.WSFED_ALLOWED_REALMS='https://exchange.corp']  comma-separated;
  *                   defaults populated because an empty list rejects everything
+ * @param {boolean}  [opts.SAML2_SLO=true]  false: sign-out does not contact the IdP
  * @param {boolean}  [opts.authenticated=false]  pre-populate session with a user
  * @param {object}   [opts.sessionWsfedArgs]  pre-populate wsfed_args in session
  * @param {object}   [opts.user]  req.user when authenticated
@@ -41,6 +42,9 @@ function buildApp(opts = {}) {
     app.set('WSFED_PKCS7', opts.WSFED_PKCS7 || 'exchange.p7b');
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
     app.set('WSFED_TOKEN_LIFETIME', opts.WSFED_TOKEN_LIFETIME || 600);
+    app.set('SESSION_SECRET', 'test-secret');
+    app.set('WSFED_SSO_RECORD_MAX_AGE', 28800);
+    app.set('SAML2_SLO', opts.SAML2_SLO !== undefined ? opts.SAML2_SLO : true);
     app.set('SAML2_CLOCK_SKEW_MS', opts.SAML2_CLOCK_SKEW_MS !== undefined ? opts.SAML2_CLOCK_SKEW_MS : 3000);
     app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(
         opts.WSFED_ALLOWED_REALMS !== undefined ? opts.WSFED_ALLOWED_REALMS : 'https://exchange.corp'

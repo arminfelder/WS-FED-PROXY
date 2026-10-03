@@ -20,7 +20,144 @@ jest.mock('fs', () => {
 let app;
 beforeAll(() => {
     process.env.WSFED_ALLOWED_REALMS = 'https://exchange.corp';
+    // fixed, so that tests can seal a sign-out record the app can open
+    process.env.SESSION_SECRET = 'test-secret';
     app = require('./helpers/buildFullApp')();
+});
+
+describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
+    const realFs = jest.requireActual('fs');
+    const nodePath = jest.requireActual('path');
+    const { SignedXml } = require('xml-crypto');
+    const KEY = realFs.readFileSync(nodePath.join(__dirname, '../fixtures/test-cert.key'));
+
+    // A LogoutResponse as Keycloak posts it (saml.force.post.binding), signed with the IdP key.
+    function signedLogoutResponse() {
+        const xml = '<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ' +
+            'xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_lr1" Version="2.0" ' +
+            `IssueInstant="${new Date().toISOString()}" InResponseTo="_req1" ` +
+            'Destination="https://proxy.example.com/saml2/logout/callback">' +
+            '<saml:Issuer>https://idp.example.com/saml</saml:Issuer>' +
+            '<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>' +
+            '</samlp:LogoutResponse>';
+        const sig = new SignedXml({
+            privateKey: KEY,
+            signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+            canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
+        });
+        sig.addReference({
+            xpath: "/*[local-name()='LogoutResponse']",
+            transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/2001/10/xml-exc-c14n#'],
+            digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        });
+        sig.computeSignature(xml, { location: { reference: "/*/*[local-name()='Issuer']", action: 'after' } });
+        return Buffer.from(sig.getSignedXml()).toString('base64');
+    }
+
+    // A LogoutRequest as Keycloak posts it when the user signs out at Keycloak, signed with the IdP key.
+    function signedLogoutRequest() {
+        const xml = '<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ' +
+            'xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_lq1" Version="2.0" ' +
+            `IssueInstant="${new Date().toISOString()}" Destination="https://proxy.example.com/saml2/logout/callback">` +
+            '<saml:Issuer>https://idp.example.com/saml</saml:Issuer>' +
+            '<saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">u@corp</saml:NameID>' +
+            '<samlp:SessionIndex>idx-1</samlp:SessionIndex>' +
+            '</samlp:LogoutRequest>';
+        const sig = new SignedXml({
+            privateKey: KEY,
+            signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+            canonicalizationAlgorithm: 'http://www.w3.org/2001/10/xml-exc-c14n#',
+        });
+        sig.addReference({
+            xpath: "/*[local-name()='LogoutRequest']",
+            transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/2001/10/xml-exc-c14n#'],
+            digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        });
+        sig.computeSignature(xml, { location: { reference: "/*/*[local-name()='Issuer']", action: 'after' } });
+        return Buffer.from(sig.getSignedXml()).toString('base64');
+    }
+
+    describe('sign-out started at the IdP (LogoutRequest)', () => {
+        const ssoRecord = require('../../util/ssoRecord');
+        const recordCookie = () => {
+            const record = ssoRecord.addRealm(null, { nameID: 'u@corp', sessionIndex: 'idx-1' }, 'https://exchange.corp/owa/', 3600);
+            return `__Host-wsfed_sso=${ssoRecord.seal(record, 'test-secret')}`;
+        };
+
+        test('cleans up the RPs, clears the record, then answers the IdP with a LogoutResponse', async () => {
+            const res = await request(app).post('/saml2/logout/callback').type('form').set('Cookie', recordCookie())
+                .send({ SAMLRequest: signedLogoutRequest(), RelayState: 'kc-relay' });
+            expect(res.status).toBe(200);
+            expect(res.text).toContain('src="https://exchange.corp/owa/?wa=wsignoutcleanup1.0"');
+            const next = /data-next="([^"]+)"/.exec(res.text)[1].replace(/&amp;/g, '&');
+            expect(next.startsWith('https://idp.example.com/saml?SAMLResponse=')).toBe(true);
+            expect(new URL(next).searchParams.get('RelayState')).toBe('kc-relay');
+            expect(String(res.headers['set-cookie'])).toMatch(/__Host-wsfed_sso=;/);
+        });
+
+        test('a LogoutRequest for another NameID is answered, but changes nothing locally', async () => {
+            const record = ssoRecord.addRealm(null, { nameID: 'someone-else@corp', sessionIndex: 'idx-9' }, 'https://exchange.corp/owa/', 3600);
+            const res = await request(app).post('/saml2/logout/callback').type('form')
+                .set('Cookie', `__Host-wsfed_sso=${ssoRecord.seal(record, 'test-secret')}`)
+                .send({ SAMLRequest: signedLogoutRequest() });
+            expect(res.status).toBe(302);
+            expect(res.headers.location.startsWith('https://idp.example.com/saml?SAMLResponse=')).toBe(true);
+            expect(res.text).not.toContain('wsignoutcleanup1.0');
+            expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
+        });
+
+        test('without a sign-out record it answers the IdP directly', async () => {
+            const res = await request(app).post('/saml2/logout/callback').type('form')
+                .send({ SAMLRequest: signedLogoutRequest() });
+            expect(res.status).toBe(302);
+            expect(res.headers.location.startsWith('https://idp.example.com/saml?SAMLResponse=')).toBe(true);
+        });
+
+        test('an unsigned LogoutRequest is refused', async () => {
+            const unsigned = Buffer.from(Buffer.from(signedLogoutRequest(), 'base64').toString()
+                .replace(/<ds:Signature[\s\S]*<\/ds:Signature>|<Signature[\s\S]*<\/Signature>/, '')).toString('base64');
+            const res = await request(app).post('/saml2/logout/callback').type('form').set('Cookie', recordCookie())
+                .send({ SAMLRequest: unsigned });
+            expect(res.status).toBe(400);
+            expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
+        });
+
+        test('a redirect-binding LogoutRequest without Signature is refused', async () => {
+            const res = await request(app).get('/saml2/logout/callback').query({ SAMLRequest: 'x' });
+            expect(res.status).toBe(400);
+        });
+    });
+
+    test('a signed LogoutResponse completes the sign-out', async () => {
+        // node-saml looks for InResponseTo only on <Response>, so with "always" this was
+        // rejected with "InResponseTo is missing from response"
+        const res = await request(app).post('/saml2/logout/callback').type('form')
+            .send({ SAMLResponse: signedLogoutResponse(), RelayState: 'f'.repeat(32) });
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/signed out/i);
+    });
+
+    test('an unsigned LogoutResponse is still refused', async () => {
+        const unsigned = Buffer.from(Buffer.from(signedLogoutResponse(), 'base64').toString()
+            .replace(/<ds:Signature[\s\S]*<\/ds:Signature>|<Signature[\s\S]*<\/Signature>/, '')).toString('base64');
+        const res = await request(app).post('/saml2/logout/callback').type('form').send({ SAMLResponse: unsigned });
+        expect(res.status).toBe(400);
+    });
+
+    test('a LogoutResponse posted to the login ACS URL /saml2/callback is refused', async () => {
+        // The IdP must send it to /saml2/logout/callback (realm.json). Its RelayState is not
+        // the one of a pending sign-in, so the callback refuses it before the strategy runs.
+        const res = await request(app).post('/saml2/callback').type('form')
+            .send({ SAMLResponse: signedLogoutResponse(), RelayState: 'f'.repeat(32) });
+        expect(res.status).toBe(403);
+    });
+
+    test('login responses keep InResponseTo "always"', () => {
+        const passport = require('passport');
+        expect(passport._strategy('saml')._saml.options.validateInResponseTo).toBe('always');
+        expect(passport._strategy('saml-force')._saml.options.validateInResponseTo).toBe('always');
+        expect(passport._strategy('saml-logout')._saml.options.validateInResponseTo).toBe('ifPresent');
+    });
 });
 
 describe('error page', () => {

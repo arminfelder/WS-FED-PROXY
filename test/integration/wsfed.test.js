@@ -95,7 +95,7 @@ describe('GET /wsfed — unauthenticated requests', () => {
         const app = buildApp();
         const res = await request(app)
             .get('/wsfed')
-            .query({ wa: 'wsignout1.0' });
+            .set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });
         expect(res.status).toBe(302);
         expect(res.headers.location).toMatch('/saml2/logout');
     });
@@ -388,6 +388,92 @@ describe('GET /wsfed — wfresh (WS-Federation 1.2 §13.2.2)', () => {
     });
 });
 
+describe('GET /wsfed — realm tracking and sign-out cleanup (WS-Federation 1.2 §13.1.2)', () => {
+    const ssoRecord = require('../../util/ssoRecord');
+    const USER = { id: 'u@corp', upn: 'u@corp', sid: 'S-1', nameID: 'u@corp', sessionIndex: 'idx-1' };
+    const sealed = (realms) => {
+        let r = null;
+        for (const realm of realms) r = ssoRecord.addRealm(r, USER, realm, 3600);
+        return `__Host-wsfed_sso=${ssoRecord.seal(r, 'test-secret')}`;
+    };
+
+    test('token issuance records the realm in an encrypted, HttpOnly, Secure, SameSite=None cookie (default SESSION_SAMESITE)', async () => {
+        const app = buildApp({ authenticated: true, user: USER, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa/' } });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(200);
+        const cookie = [].concat(res.headers['set-cookie']).find((c) => c.startsWith('__Host-wsfed_sso='));
+        expect(cookie).toMatch(/HttpOnly/);
+        expect(cookie).toMatch(/Secure/);
+        expect(cookie).toMatch(/SameSite=None/);
+        // the __Host- prefix requires Path=/ and no Domain, or the browser drops the cookie
+        expect(cookie).toMatch(/Path=\//);
+        expect(cookie).not.toMatch(/Domain=/i);
+        const record = ssoRecord.open(/^__Host-wsfed_sso=([^;]+)/.exec(cookie)[1], 'test-secret');
+        expect(record.realms).toEqual(['https://exchange.corp/owa/']);
+        expect(record.sessionIndex).toBe('idx-1');
+    });
+
+    test('a second issuance adds its realm to the record', async () => {
+        const app = buildApp({ authenticated: true, user: USER, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/ecp/' } });
+        const res = await request(app).get('/wsfed').set('Cookie', sealed(['https://exchange.corp/owa/']));
+        const cookie = [].concat(res.headers['set-cookie']).find((c) => c.startsWith('__Host-wsfed_sso='));
+        const record = ssoRecord.open(/^__Host-wsfed_sso=([^;]+)/.exec(cookie)[1], 'test-secret');
+        expect(record.realms).toEqual(['https://exchange.corp/owa/', 'https://exchange.corp/ecp/']);
+    });
+
+    test('wsignout1.0 loads wsignoutcleanup1.0 for each allowlisted realm, then continues to the IdP step', async () => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed')
+            .set('Cookie', sealed(['https://exchange.corp/owa/', 'https://removed.tld/app']))
+            .set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('src="https://exchange.corp/owa/?wa=wsignoutcleanup1.0"');
+        expect(res.text).not.toContain('removed.tld');
+        expect(res.text).toMatch(/data-next="\/saml2\/logout\?state=[0-9a-f]{32}"/);
+        expect(res.headers['content-security-policy']).toMatch(/img-src https:\/\/exchange\.corp;/);
+        expect(res.headers['content-security-policy']).toMatch(/script-src 'nonce-[^']+'/);
+        expect(res.headers['cross-origin-embedder-policy']).toBe('unsafe-none');
+        expect(res.headers['cache-control']).toBe('no-store');
+        // the fallback refresh only without script: two navigations would use the one-time state twice
+        expect(res.text).toMatch(/<noscript><meta http-equiv="refresh" content="6;url=\/saml2\/logout\?state=[0-9a-f]{32}"><\/noscript>/);
+        expect(res.text.replace(/<noscript>[\s\S]*?<\/noscript>/g, '')).not.toMatch(/http-equiv="refresh"/);
+        // kept until /saml2/logout uses the state, so a failed sign-out can be done again
+        expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
+    });
+
+    test('a record that cannot be read is ignored', async () => {
+        const res = await request(buildApp()).get('/wsfed').set('Cookie', '__Host-wsfed_sso=garbage').set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });
+        expect(res.status).toBe(302);
+        // no identity: no IdP step, thus no state
+        expect(res.headers.location).toBe('/saml2/logout');
+    });
+
+    test('wsignoutcleanup1.0 keeps the record, so a forged cleanup cannot stop a later IdP sign-out', async () => {
+        const res = await request(buildApp()).get('/wsfed').set('Cookie', sealed(['https://exchange.corp/owa/'])).query({ wa: 'wsignoutcleanup1.0' });
+        expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=/);
+    });
+});
+
+describe('GET /wsfed — wsignout1.0 without confirmation, like AD FS', () => {
+    // OWA sends no Referer (owa/default.aspx sets <meta name="referrer">), so the request origin cannot be checked.
+    test.each([
+        ['OWA (cross-site, no Referer)', { 'Sec-Fetch-Site': 'cross-site' }],
+        ['no headers at all', {}],
+        ['an allowlisted RP (Referer)', { Referer: 'https://exchange.corp/owa/logoff.owa' }],
+    ])('from %s: signs out directly', async (_name, headers) => {
+        const app = buildApp({ authenticated: true, user: { id: 'u', nameID: 'u@corp', sessionIndex: 'idx-1' } });
+        const res = await request(app).get('/wsfed').set(headers).query({ wa: 'wsignout1.0' });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toMatch(/^\/saml2\/logout\?state=[0-9a-f]{32}$/);
+        expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_signout_confirm/);
+    });
+
+    test('a wreply outside the allowlist is still refused', async () => {
+        const res = await request(buildApp()).get('/wsfed').query({ wa: 'wsignout1.0', wreply: 'https://attacker.tld/' });
+        expect(res.status).toBe(403);
+    });
+});
+
 describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', () => {
     test('clears the session and returns an uncached cross-origin image', async () => {
         const app = buildApp({ authenticated: true, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa' } });
@@ -416,6 +502,24 @@ describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', 
         const app = buildApp();
         const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply: 'https://attacker.tld/' });
         expect(res.status).toBe(403);
+    });
+
+    test('redirects to the parsed URL that was checked, not the raw string', async () => {
+        const res = await request(buildApp()).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply: 'HTTPS://Exchange.CORP/owa/../ecp/' });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toBe('https://exchange.corp/ecp/');
+    });
+
+    test('a backslash in wreply cannot move the redirect to another host', async () => {
+        const res = await request(buildApp()).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply: 'https://exchange.corp\\@evil.tld/' });
+        expect(res.status).toBe(302);
+        expect(new URL(res.headers.location).host).toBe('exchange.corp');
+    });
+
+    test.each(['not a url', '/relative/path', 'javascript:alert(1)'])('refuses wreply %p without touching the session', async (wreply) => {
+        const res = await request(buildApp({ authenticated: true })).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply });
+        expect(res.status).toBe(403);
+        expect(res.headers['set-cookie']).toBeUndefined();
     });
 });
 
