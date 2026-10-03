@@ -265,6 +265,73 @@ describe('GET /wsfed — token issuance on the authenticated return path', () =>
     });
 });
 
+describe('GET /wsfed — wa dispatch (WS-Federation 1.2 §13.2.1, §17)', () => {
+    const REALM = 'https://exchange.corp/owa';
+
+    test.each(['foo', 'wattr1.0', 'wpseudo1.0', 'WSIGNIN1.0'])('wa=%s with an allowed wtrealm is refused, not treated as sign-in', async (wa) => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed').query({ wa, wtrealm: REALM });
+        expect(res.status).toBe(400);
+    });
+
+    test('wa=wsignin1.0 without wtrealm is refused', async () => {
+        const app = buildApp({ INVALID_LOGIN_REDIRECT: 'https://sso.corp/error' });
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0' });
+        expect(res.status).toBe(400);
+    });
+
+    test('an unsupported wa on the authenticated return path issues no token', async () => {
+        const app = buildApp({
+            authenticated: true,
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: REALM },
+        });
+        const res = await request(app).get('/wsfed').query({ wa: 'bogus' });
+        expect(res.status).toBe(400);
+        expect(res.text).not.toContain('token-issued');
+    });
+
+    test('a new wsignin1.0 while authenticated starts a new sign-in instead of using the stored arguments', async () => {
+        const app = buildApp({
+            authenticated: true,
+            sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: REALM },
+        });
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toMatch('/saml2/login');
+    });
+});
+
+describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', () => {
+    test('clears the session and returns an uncached cross-origin image', async () => {
+        const app = buildApp({ authenticated: true, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa' } });
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0' });
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toBe('image/gif');
+        expect(res.headers['cache-control']).toBe('no-store');
+        expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+        expect(String(res.headers['set-cookie'])).toMatch(/connect\.sid=;/);
+    });
+
+    test('does not contact the IdP', async () => {
+        const app = buildApp({ authenticated: true });
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0' });
+        expect(res.headers.location).toBeUndefined();
+    });
+
+    test('redirects to an allowlisted wreply', async () => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply: 'https://exchange.corp/owa/' });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toBe('https://exchange.corp/owa/');
+    });
+
+    test('refuses a wreply outside the allowlist', async () => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply: 'https://attacker.tld/' });
+        expect(res.status).toBe(403);
+    });
+});
+
 describe('GET /wsfed/FederationMetadata — issuer is taken from config', () => {
     test('metadata endpoint uses WSFED_ISSUER, not hardcoded string', async () => {
         const app = buildApp({ WSFED_ISSUER: 'https://proxy.example.com/wsfed' });
