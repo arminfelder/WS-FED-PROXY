@@ -210,6 +210,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(app.get("SAML2_ROOT"), saml2Router);
 app.use(app.get("WSFED_ROOT"), wsfedRouter);
+app.get('/FederationMetadata/2007-06/FederationMetadata.xml', wsfedRouter.federationMetadata);
 
 
 

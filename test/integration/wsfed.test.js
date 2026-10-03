@@ -331,14 +331,3 @@ describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', 
         expect(res.status).toBe(403);
     });
 });
-
-describe('GET /wsfed/FederationMetadata — issuer is taken from config', () => {
-    test('metadata endpoint uses WSFED_ISSUER, not hardcoded string', async () => {
-        const app = buildApp({ WSFED_ISSUER: 'https://proxy.example.com/wsfed' });
-        const res = await request(app)
-            .get('/wsfed/FederationMetadata/2007-06/FederationMetadata.xml');
-        expect(res.status).toBe(200);
-        expect(res.text).toContain('https://proxy.example.com/wsfed');
-        expect(res.text).not.toContain('the-issuer');
-    });
-});

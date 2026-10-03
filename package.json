@@ -13,6 +13,7 @@
   "dependencies": {
     "@elastic/ecs-helpers": "^2.1.1",
     "@node-saml/passport-saml": "^5.1.1",
+    "@xmldom/xmldom": "^0.8.15",
     "debug": "^4.4.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
@@ -24,7 +25,8 @@
     "passport": "^0.7.0",
     "pug": "^3.0.4",
     "security-identifier": "^1.0.0",
-    "wsfed": "^8.0.0"
+    "wsfed": "^8.0.0",
+    "xml-crypto": "^6.3.2"
   },
   "overrides": {
     "object-keys": "^1.1.1",

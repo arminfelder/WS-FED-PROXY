@@ -23,6 +23,7 @@ const path = require("path");
 const profileMapper = require("../util/OWAProfileMapper");
 const { isRealmAllowed, isWreplyAllowed } = require("../util/validateRedirect");
 const { logError } = require("../util/logError");
+const { metadataHandler } = require("../util/metadata");
 const router = express.Router();
 
 const certsDir = path.join(__dirname, '../certs');
@@ -173,21 +174,39 @@ router.get('/',(req,res,next)=>{
 })(req,res,next)
 });
 
-router.get('/FederationMetadata/2007-06/FederationMetadata.xml', (req,res, next)=> {
-    const { cert } = getCerts(req.app);
-    return wsfed.metadata({
-        issuer: req.app.get("WSFED_ISSUER"),
+// WS-Federation 1.2 §3.2.2. app.js also mounts this at the server root.
+const federationMetadata = metadataHandler((req) => {
+    const { cert, key } = getCerts(req.app);
+    return {
+        issuer:     req.app.get("WSFED_ISSUER"),
+        endpoint:   new URL(req.app.get("WSFED_ISSUER")).origin + req.app.get("WSFED_ROOT"),
         cert,
-    })(req, res)
+        key,
+        claimTypes: profileMapper.prototype.metadata,
+    };
 });
+router.get('/FederationMetadata/2007-06/FederationMetadata.xml', federationMetadata);
+router.federationMetadata = federationMetadata;
 
-router.get('/adfs/fs/federationserverservice.asmx',
-    wsfed.federationServerService.wsdl);
+// The wsfed library builds URLs from the Host and X-Forwarded-* headers.
+// This request copy gives it the configured host only.
+function configuredHostRequest(req) {
+    return {
+        query:       req.query,
+        originalUrl: req.baseUrl + req.path,
+        protocol:    'https',
+        headers:     { host: new URL(req.app.get("WSFED_ISSUER")).host },
+    };
+}
+
+router.get('/adfs/fs/federationserverservice.asmx', (req, res) => {
+    return wsfed.federationServerService.wsdl(configuredHostRequest(req), res);
+});
 
 router.post('/adfs/fs/federationserverservice.asmx',
     (req,res,next) => {
     const { cert, pkcs7 } = getCerts(req.app);
-    return wsfed.federationServerService.thumbprint({ pkcs7, cert })(req, res)
+    return wsfed.federationServerService.thumbprint({ pkcs7, cert })(configuredHostRequest(req), res)
 });
 
 

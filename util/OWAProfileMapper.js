@@ -83,6 +83,11 @@ OWAProfileMapper.prototype.getNameIdentifier = function () {
  * @return {[type]}    WsFederation claim identity
  */
 OWAProfileMapper.prototype.metadata = [ {
+  id: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
+  optional: false,
+  displayName: "Name ID",
+  description: "The unique identifier of the user"
+}, {
   id: "http://schemas.microsoft.com/ws/2008/06/identity/claims/primarysid",
   optional: false,
   displayName: "Primary SID",
