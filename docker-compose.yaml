@@ -37,8 +37,8 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./selfsigned.crt:/etc/nginx/selfsigned.crt
-      - ./selfsigned.key:/etc/nginx/selfsigned.key
+      - ./certs/nginx.crt:/etc/nginx/selfsigned.crt:ro
+      - ./certs/nginx.key:/etc/nginx/selfsigned.key:ro
   keycloak:
     image: quay.io/keycloak/keycloak:16.1.0
     environment:

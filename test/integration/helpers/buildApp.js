@@ -11,7 +11,6 @@ const session = require('express-session');
 const passport = require('passport');
 const { hppPrevent } = require('hpp-prevent');
 const { parseAllowedRealms } = require('../../../util/validateRedirect');
-
 /**
  * @param {object} opts
  * @param {string}   [opts.SAML2_ROOT='/saml2']

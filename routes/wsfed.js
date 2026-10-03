@@ -38,8 +38,26 @@ function getCerts(app) {
 
 
 
+const WSFED_PARAMS = ['wa', 'wtrealm', 'wreply', 'wctx'];
+
+// Express 5 parses a repeated key into an array. The allowlist checks need one string for each parameter.
+function readWsfedParams(query) {
+    const params = {};
+    for (const name of WSFED_PARAMS) {
+        const value = query[name];
+        if (value === undefined) continue;
+        if (typeof value !== 'string') return null;
+        params[name] = value;
+    }
+    return params;
+}
+
 router.get('/',(req,res,next)=>{
-    if("wa" in req.query && req.query.wa === "wsignout1.0") { // user requests a logout
+    const query = readWsfedParams(req.query);
+    if (query === null) {
+        return next(createError(400, 'repeated or malformed WS-Fed parameter'));
+    }
+    if(query.wa === "wsignout1.0") { // user requests a logout
         // CSRF guard for /saml2/logout, which refuses to run without this flag
         req.session.logout_pending = true;
         res.redirect(req.app.get("SAML2_ROOT") + "/logout");
@@ -54,18 +72,17 @@ router.get('/',(req,res,next)=>{
         if (!isWreplyAllowed(args.wreply, args.wtrealm, allowedOrigins)) {
             return next(createError(403, `wreply origin not allowed: ${args.wreply}`));
         }
-        req.query = args;
+        res.locals.wsfedArgs = args;
         next();
-    }else if ( "wa" in req.query && "wtrealm" in req.query ){   // user is not logged in and requests a login
+    }else if (query.wa !== undefined && query.wtrealm !== undefined){   // user is not logged in and requests a login
         const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
-        if (!isRealmAllowed(req.query.wtrealm, allowedOrigins)) {
-            return next(createError(403, `wtrealm not in allowlist: ${req.query.wtrealm}`));
+        if (!isRealmAllowed(query.wtrealm, allowedOrigins)) {
+            return next(createError(403, `wtrealm not in allowlist: ${query.wtrealm}`));
         }
-        if (!isWreplyAllowed(req.query.wreply, req.query.wtrealm, allowedOrigins)) {
-            return next(createError(403, `wreply origin not allowed: ${req.query.wreply}`));
+        if (!isWreplyAllowed(query.wreply, query.wtrealm, allowedOrigins)) {
+            return next(createError(403, `wreply origin not allowed: ${query.wreply}`));
         }
-        const sessData = req.session;
-        sessData.wsfed_args = Object.assign({},req.query);
+        req.session.wsfed_args = query;
         req.session.save();
         res.redirect(req.app.get("SAML2_ROOT") + "/login");
     }else if(req.isAuthenticated()) { // user is authenticated, but no valid session data is present, destroy the session as it is not valid
@@ -80,16 +97,19 @@ router.get('/',(req,res,next)=>{
     }
 },(req,res,next)=>{
     const { cert, key } = getCerts(req.app);
+    const args = res.locals.wsfedArgs;
     return wsfed.auth({
     issuer:     req.app.get("WSFED_ISSUER"),
     cert,
     key,
     // explicit — the library defaults to 8 hours
     lifetime:   req.app.get("WSFED_TOKEN_LIFETIME"),
+    audience:   args.wtrealm,
+    wctx:       args.wctx,
     profileMapper: profileMapper,
-    getPostURL: function (wtrealm, wreply, req, callback) {
+    getPostURL: function (_wtrealm, _wreply, req, callback) {
         // empty wreply falls back to wtrealm, already checked against the allowlist
-        const redirectUrl = wreply || wtrealm;
+        const redirectUrl = args.wreply || args.wtrealm;
         // callback() must fire inside destroy(): wsfed sends the response
         // synchronously from it, so clearCookie afterwards would be too late
         req.session.destroy(function (err){

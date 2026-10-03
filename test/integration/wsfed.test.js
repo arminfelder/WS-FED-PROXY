@@ -106,7 +106,19 @@ describe('GET /wsfed — HTTP Parameter Pollution resistance', () => {
             expect(res.headers.location).toMatch('/saml2/login');
         }
     });
-});
+
+    // An array wtrealm becomes the string "allowed,attacker". The URL origin of that string is the allowed origin.
+    test('rejects a repeated wtrealm before the allowlist check', async () => {
+        const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
+        const res = await request(app).get('/wsfed?wa=wsignin1.0&wtrealm=https://exchange.corp/owa&wtrealm=https://attacker.com');
+        expect(res.status).toBe(400);
+    });
+
+    test('rejects a repeated wreply before the allowlist check', async () => {
+        const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
+        const res = await request(app).get('/wsfed?wa=wsignin1.0&wtrealm=https://exchange.corp/owa&wreply=https://exchange.corp/cb&wreply=https://attacker.com');
+        expect(res.status).toBe(400);
+    });});
 
 describe('GET /wsfed — wtrealm allowlist enforcement', () => {
     test('allows request when wtrealm is in WSFED_ALLOWED_REALMS', async () => {
