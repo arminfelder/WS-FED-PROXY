@@ -572,6 +572,8 @@
     "frontchannelLogout" : true,
     "protocol" : "saml",
     "attributes" : {
+      "saml_single_logout_service_url_redirect" : "https://192.168.102.1/saml2/logout/callback",
+      "saml_single_logout_service_url_post" : "https://192.168.102.1/saml2/logout/callback",
       "saml.force.post.binding" : "true",
       "saml.multivalued.roles" : "false",
       "oauth2.device.authorization.grant.enabled" : "false",

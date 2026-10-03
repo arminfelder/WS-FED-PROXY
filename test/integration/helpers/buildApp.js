@@ -40,6 +40,8 @@ function buildApp(opts = {}) {
     app.set('WSFED_PKCS7', opts.WSFED_PKCS7 || 'exchange.p7b');
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
     app.set('WSFED_TOKEN_LIFETIME', opts.WSFED_TOKEN_LIFETIME || 600);
+    app.set('SESSION_SECRET', 'test-secret');
+    app.set('WSFED_SSO_RECORD_MAX_AGE', 28800);
     app.set('SAML2_CLOCK_SKEW_MS', opts.SAML2_CLOCK_SKEW_MS !== undefined ? opts.SAML2_CLOCK_SKEW_MS : 3000);
     app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(
         opts.WSFED_ALLOWED_REALMS !== undefined ? opts.WSFED_ALLOWED_REALMS : 'https://exchange.corp'

@@ -16,18 +16,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 const crypto = require('crypto');
-const { SignedXml } = require('xml-crypto');
-const { DOMImplementation, XMLSerializer } = require('@xmldom/xmldom');
+const {SignedXml} = require('xml-crypto');
+const {DOMImplementation, XMLSerializer} = require('@xmldom/xmldom');
 
 const XMLNS = 'http://www.w3.org/2000/xmlns/';
 
 const NS = {
-    md:   'urn:oasis:names:tc:SAML:2.0:metadata',
-    fed:  'http://docs.oasis-open.org/wsfed/federation/200706',
+    md: 'urn:oasis:names:tc:SAML:2.0:metadata',
+    fed: 'http://docs.oasis-open.org/wsfed/federation/200706',
     auth: 'http://docs.oasis-open.org/wsfed/authorization/200706',
-    wsa:  'http://www.w3.org/2005/08/addressing',
-    xsi:  'http://www.w3.org/2001/XMLSchema-instance',
-    ds:   'http://www.w3.org/2000/09/xmldsig#',
+    wsa: 'http://www.w3.org/2005/08/addressing',
+    xsi: 'http://www.w3.org/2001/XMLSchema-instance',
+    ds: 'http://www.w3.org/2000/09/xmldsig#',
 };
 // wsfed issues SAML 1.1 assertions only. ADFS advertises them with this URI.
 const SAML11_TOKEN_TYPE = 'urn:oasis:names:tc:SAML:1.0:assertion';
@@ -54,7 +54,7 @@ function element(doc, ns, name, attributes = {}, children = []) {
  * @param {{issuer: string, endpoint: string, cert: (string|Buffer), claimTypes: Array<{id: string, optional?: boolean, displayName?: string, description?: string}>}} opts
  * @returns {string} unsigned XML
  */
-function buildMetadataXml({ issuer, endpoint, cert, claimTypes }) {
+function buildMetadataXml({issuer, endpoint, cert, claimTypes}) {
     const doc = new DOMImplementation().createDocument(NS.md, 'EntityDescriptor', null);
     const el = (ns, name, attributes, children) => element(doc, ns, name, attributes, children);
     const endpointReference = () => el(NS.wsa, 'EndpointReference', {}, [el(NS.wsa, 'Address', {}, [endpoint])]);
@@ -63,18 +63,18 @@ function buildMetadataXml({ issuer, endpoint, cert, claimTypes }) {
     root.setAttribute('ID', `_${crypto.randomUUID()}`);
     root.setAttribute('entityID', issuer);
 
-    const role = el(NS.md, 'RoleDescriptor', { protocolSupportEnumeration: NS.fed, ServiceDisplayName: issuer });
+    const role = el(NS.md, 'RoleDescriptor', {protocolSupportEnumeration: NS.fed, ServiceDisplayName: issuer});
     // xsi:type holds a QName: its prefix must be declared on this element, not only on the fed:* children
     role.setAttributeNS(XMLNS, 'xmlns:fed', NS.fed);
     role.setAttributeNS(NS.xsi, 'xsi:type', 'fed:SecurityTokenServiceType');
 
     // child order follows SecurityTokenServiceType, WS-Federation 1.2 §3.1.2 p37-39
-    role.appendChild(el(NS.md, 'KeyDescriptor', { use: 'signing' }, [
+    role.appendChild(el(NS.md, 'KeyDescriptor', {use: 'signing'}, [
         el(NS.ds, 'KeyInfo', {}, [el(NS.ds, 'X509Data', {}, [el(NS.ds, 'X509Certificate', {}, [pemBody(cert)])])]),
     ]));
-    role.appendChild(el(NS.fed, 'fed:TokenTypesOffered', {}, [el(NS.fed, 'fed:TokenType', { Uri: SAML11_TOKEN_TYPE })]));
+    role.appendChild(el(NS.fed, 'fed:TokenTypesOffered', {}, [el(NS.fed, 'fed:TokenType', {Uri: SAML11_TOKEN_TYPE})]));
     role.appendChild(el(NS.fed, 'fed:ClaimTypesOffered', {}, claimTypes.map((ct) =>
-        el(NS.auth, 'auth:ClaimType', { Uri: ct.id, Optional: !!ct.optional }, [
+        el(NS.auth, 'auth:ClaimType', {Uri: ct.id, Optional: !!ct.optional}, [
             ...(ct.displayName ? [el(NS.auth, 'auth:DisplayName', {}, [ct.displayName])] : []),
             ...(ct.description ? [el(NS.auth, 'auth:Description', {}, [ct.description])] : []),
         ]))));
@@ -90,7 +90,7 @@ function buildMetadataXml({ issuer, endpoint, cert, claimTypes }) {
  * Signs the document as WS-Federation 1.2 §3.1.15 requires: enveloped signature,
  * exclusive canonicalization, with the token signing key. ds:Signature is the first child.
  */
-function signMetadataXml(xml, { key, cert }) {
+function signMetadataXml(xml, {key, cert}) {
     const sig = new SignedXml({
         privateKey: key,
         publicCert: cert,
@@ -103,7 +103,7 @@ function signMetadataXml(xml, { key, cert }) {
         transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature', 'http://www.w3.org/2001/10/xml-exc-c14n#'],
         digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
     });
-    sig.computeSignature(xml, { prefix: 'ds', location: { reference: ENTITY_XPATH, action: 'prepend' } });
+    sig.computeSignature(xml, {prefix: 'ds', location: {reference: ENTITY_XPATH, action: 'prepend'}});
     return sig.getSignedXml();
 }
 
@@ -123,4 +123,4 @@ function metadataHandler(getOptions) {
     };
 }
 
-module.exports = { buildMetadataXml, signMetadataXml, metadataHandler };
+module.exports = {buildMetadataXml, signMetadataXml, metadataHandler};

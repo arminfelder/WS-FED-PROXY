@@ -88,11 +88,14 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
     app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
     app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
+    app.set("COOKIE_DOMAIN", new URL(app.get("WSFED_ISSUER")).hostname);
     try {
         // seconds; the only credential outliving the session, so keep it short
         app.set("WSFED_TOKEN_LIFETIME", parseIntEnv("WSFED_TOKEN_LIFETIME", process.env.WSFED_TOKEN_LIFETIME, { def: 600, min: 60, max: 3600 }));
         app.set("SESSION_MAX_STORE", parseIntEnv("SESSION_MAX_STORE", process.env.SESSION_MAX_STORE, { def: 500, min: 1, max: 100000 }));
         app.set("SAML2_CLOCK_SKEW_MS", parseIntEnv("SAML2_CLOCK_SKEW_MS", process.env.SAML2_CLOCK_SKEW_MS, { def: 3000, min: 0, max: 300000 }));
+        // seconds; how long sign-out can still reach the RPs and the IdP session
+        app.set("WSFED_SSO_RECORD_MAX_AGE", parseIntEnv("WSFED_SSO_RECORD_MAX_AGE", process.env.WSFED_SSO_RECORD_MAX_AGE, { def: 28800, min: 60, max: 604800 }));
     } catch (err) {
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
@@ -180,6 +183,7 @@ const callbackLimiter = rateLimit({
 });
 app.use(globalLimiter);
 app.use(app.get("SAML2_ROOT") + '/callback', callbackLimiter);
+app.use(app.get("SAML2_ROOT") + '/logout/callback', callbackLimiter);
 
 app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
@@ -195,7 +199,7 @@ app.use(session({
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
-        domain: new URL(app.get("WSFED_ISSUER")).hostname
+        domain: app.get("COOKIE_DOMAIN")
     },
     saveUninitialized: false,
     store: new MemoryStore({

@@ -82,7 +82,7 @@ describe('GET /wsfed — unauthenticated requests', () => {
         const app = buildApp();
         const res = await request(app)
             .get('/wsfed')
-            .query({ wa: 'wsignout1.0' });
+            .set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });
         expect(res.status).toBe(302);
         expect(res.headers.location).toMatch('/saml2/logout');
     });
@@ -372,6 +372,134 @@ describe('GET /wsfed — wfresh (WS-Federation 1.2 §13.2.2)', () => {
         });
         const res = await request(app).get('/wsfed');
         expect(res.status).toBe(403);
+    });
+});
+
+describe('GET /wsfed — realm tracking and sign-out cleanup (WS-Federation 1.2 §13.1.2)', () => {
+    const ssoRecord = require('../../util/ssoRecord');
+    const USER = { id: 'u@corp', upn: 'u@corp', sid: 'S-1', nameID: 'u@corp', sessionIndex: 'idx-1' };
+    const sealed = (realms) => {
+        let r = null;
+        for (const realm of realms) r = ssoRecord.addRealm(r, USER, realm, 3600);
+        return `wsfed_sso=${ssoRecord.seal(r, 'test-secret')}`;
+    };
+
+    test('token issuance records the realm in an encrypted, HttpOnly, Secure, SameSite=Lax cookie', async () => {
+        const app = buildApp({ authenticated: true, user: USER, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa/' } });
+        const res = await request(app).get('/wsfed');
+        expect(res.status).toBe(200);
+        const cookie = [].concat(res.headers['set-cookie']).find((c) => c.startsWith('wsfed_sso='));
+        expect(cookie).toMatch(/HttpOnly/);
+        expect(cookie).toMatch(/Secure/);
+        expect(cookie).toMatch(/SameSite=Lax/);
+        const record = ssoRecord.open(/^wsfed_sso=([^;]+)/.exec(cookie)[1], 'test-secret');
+        expect(record.realms).toEqual(['https://exchange.corp/owa/']);
+        expect(record.sessionIndex).toBe('idx-1');
+    });
+
+    test('a second issuance adds its realm to the record', async () => {
+        const app = buildApp({ authenticated: true, user: USER, sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/ecp/' } });
+        const res = await request(app).get('/wsfed').set('Cookie', sealed(['https://exchange.corp/owa/']));
+        const cookie = [].concat(res.headers['set-cookie']).find((c) => c.startsWith('wsfed_sso='));
+        const record = ssoRecord.open(/^wsfed_sso=([^;]+)/.exec(cookie)[1], 'test-secret');
+        expect(record.realms).toEqual(['https://exchange.corp/owa/', 'https://exchange.corp/ecp/']);
+    });
+
+    test('wsignout1.0 loads wsignoutcleanup1.0 for each allowlisted realm, then continues to the IdP step', async () => {
+        const app = buildApp();
+        const res = await request(app).get('/wsfed')
+            .set('Cookie', sealed(['https://exchange.corp/owa/', 'https://removed.tld/app']))
+            .set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('src="https://exchange.corp/owa/?wa=wsignoutcleanup1.0"');
+        expect(res.text).not.toContain('removed.tld');
+        expect(res.text).toMatch(/data-next="\/saml2\/logout\?state=[0-9a-f]{32}"/);
+        expect(res.headers['content-security-policy']).toMatch(/img-src https:\/\/exchange\.corp;/);
+        expect(res.headers['content-security-policy']).toMatch(/script-src 'nonce-[^']+'/);
+        expect(res.headers['cross-origin-embedder-policy']).toBe('unsafe-none');
+        expect(res.headers['cache-control']).toBe('no-store');
+        // kept until /saml2/logout uses the state, so a failed sign-out can be done again
+        expect(String(res.headers['set-cookie'])).not.toMatch(/wsfed_sso=;/);
+    });
+
+    test('a record that cannot be read is ignored', async () => {
+        const res = await request(buildApp()).get('/wsfed').set('Cookie', 'wsfed_sso=garbage').set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toMatch('/saml2/logout?state=');
+    });
+
+    test('wsignoutcleanup1.0 keeps the record, so a forged cleanup cannot stop a later IdP sign-out', async () => {
+        const res = await request(buildApp()).get('/wsfed').set('Cookie', sealed(['https://exchange.corp/owa/'])).query({ wa: 'wsignoutcleanup1.0' });
+        expect(String(res.headers['set-cookie'])).not.toMatch(/wsfed_sso=/);
+    });
+});
+
+describe('GET /wsfed — wsignout1.0 request origin (logout CSRF)', () => {
+    test.each([
+        ['another site', { Referer: 'https://attacker.tld/page' }],
+        ['no Referer or Origin', {}],
+        ['a cross-site fetch', { 'Sec-Fetch-Site': 'cross-site' }],
+    ])('from %s: shows a confirmation page and changes nothing', async (_name, headers) => {
+        const res = await request(buildApp({ authenticated: true })).get('/wsfed').set(headers).query({ wa: 'wsignout1.0', wreply: 'https://exchange.corp/owa/' });
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('Sign out?');
+        expect(res.text).toMatch(/href="\/wsfed\?wa=wsignout1\.0&amp;confirm=[0-9a-f]{32}&amp;wreply=https%3A%2F%2Fexchange\.corp%2Fowa%2F"/);
+        expect(res.headers.location).toBeUndefined();
+        // only the confirmation binding is set; the session and the sign-out record are untouched
+        const cookies = [].concat(res.headers['set-cookie']);
+        expect(cookies).toHaveLength(1);
+        expect(cookies[0]).toMatch(/^__Host-wsfed_signout_confirm=[0-9a-f]{32};.*HttpOnly.*Secure.*SameSite=Strict/);
+        // browsers drop a __Host- cookie that has a Domain or a Path other than /
+        expect(cookies[0]).toMatch(/Path=\/;/);
+        expect(cookies[0]).not.toMatch(/Domain=/i);
+    });
+
+    test.each([
+        ['an allowlisted RP (Referer)', { Referer: 'https://exchange.corp/owa/logoff.owa' }],
+        ['an allowlisted RP (Origin)', { Origin: 'https://exchange.corp' }],
+        ['the proxy itself', { Referer: 'https://proxy.example.com/wsfed?wa=wsignout1.0' }],
+        ['a same-origin navigation', { 'Sec-Fetch-Site': 'same-origin' }],
+    ])('from %s: signs out', async (_name, headers) => {
+        const res = await request(buildApp()).get('/wsfed').set(headers).query({ wa: 'wsignout1.0' });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toMatch('/saml2/logout?state=');
+    });
+
+    async function confirmPage(app) {
+        const page = await request(app).get('/wsfed').query({ wa: 'wsignout1.0' });
+        return {
+            href: /href="([^"]+)"/.exec(page.text)[1].replace(/&amp;/g, '&'),
+            cookie: /^__Host-wsfed_signout_confirm=[^;]+/.exec([].concat(page.headers['set-cookie'])[0])[0],
+        };
+    }
+
+    test('the confirmation link works one time, in the browser that got the page', async () => {
+        const app = buildApp();
+        const { href, cookie } = await confirmPage(app);
+        const first = await request(app).get(href).set('Cookie', cookie);
+        expect(first.status).toBe(302);
+        expect(first.headers.location).toMatch('/saml2/logout?state=');
+        expect(String(first.headers['set-cookie'])).toMatch(/__Host-wsfed_signout_confirm=;/);
+        const again = await request(app).get(href).set('Cookie', cookie);
+        expect(again.text).toContain('Sign out?');
+    });
+
+    test('a link with a token that another client got does not sign the victim out', async () => {
+        // the attacker loads the confirmation page, then sends the link to the victim
+        const app = buildApp();
+        const attacker = await confirmPage(app);
+        const victim = await request(app).get(attacker.href).set('Referer', 'https://attacker.tld/');
+        expect(victim.text).toContain('Sign out?');
+        expect(victim.headers.location).toBeUndefined();
+
+        const other = await confirmPage(app);
+        const wrongBrowser = await request(app).get(attacker.href).set('Cookie', other.cookie);
+        expect(wrongBrowser.text).toContain('Sign out?');
+    });
+
+    test('a forged confirm value does not count', async () => {
+        const res = await request(buildApp()).get('/wsfed').query({ wa: 'wsignout1.0', confirm: 'f'.repeat(32) });
+        expect(res.text).toContain('Sign out?');
     });
 });
 
