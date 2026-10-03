@@ -1,0 +1,16 @@
+doctype html
+html
+  head
+    meta(charset='UTF-8')
+    title Working...
+  body
+    form(method='post' name='hiddenform' action=callback)
+      input(type='hidden' name='wa' value='wsignin1.0')
+      input(type='hidden' name='wresult' value=wresult)
+      if wctx !== undefined
+        input(type='hidden' name='wctx' value=wctx)
+      noscript
+        p Script is disabled. Click Submit to continue.
+        input(type='submit' value='Submit')
+    script.
+      document.forms[0].submit();

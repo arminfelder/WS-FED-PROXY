@@ -41,7 +41,7 @@ const app = express();
 app.use(helmet.contentSecurityPolicy({
     directives: {
         defaultSrc: ["'none'"],
-        scriptSrc:  ["'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc:  ["'unsafe-inline'"],
         // Allow the form POST to any HTTPS target — the allowlist in validateRedirect.js
         // enforces the actual destination; CSP here just blocks non-HTTPS targets.
         formAction: ["https:"],

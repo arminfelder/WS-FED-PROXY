@@ -143,6 +143,15 @@ router.get('/',(req,res,next)=>{
     audience:   args.wtrealm,
     wctx:       args.wctx,
     profileMapper: profileMapper,
+    responseHandler: function (res, postUrl, _wctx, wresult) {
+        // _wctx can come from the query of this request. Only the stored wctx is the RP value.
+        // The library writes Context="undefined" when there is no wctx (WS-Federation 1.2 §13.6.2).
+        // Context is outside the signed assertion, so the signature stays valid.
+        if (args.wctx === undefined) {
+            wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, '<t:RequestSecurityTokenResponse ');
+        }
+        res.render('wsfed-form', { callback: postUrl, wresult, wctx: args.wctx });
+    },
     getPostURL: function (_wtrealm, _wreply, req, callback) {
         // empty wreply falls back to wtrealm, already checked against the allowlist
         const redirectUrl = args.wreply || args.wtrealm;
