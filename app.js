@@ -181,7 +181,6 @@ const callbackLimiter = rateLimit({
 app.use(globalLimiter);
 app.use(app.get("SAML2_ROOT") + '/callback', callbackLimiter);
 
-app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 
 // HTTP Parameter Pollution prevention — must run after the body parsers, which
@@ -210,7 +209,6 @@ app.use(passport.initialize());
 app.use(passport.session({
     keepSessionInfo: false
 }));
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(app.get("SAML2_ROOT"), saml2Router);
 app.use(app.get("WSFED_ROOT"), wsfedRouter);
