@@ -12,6 +12,7 @@ const session = require('express-session');
 const passport = require('passport');
 const { hppPrevent } = require('hpp-prevent');
 const { parseAllowedRealms } = require('../../../util/validateRedirect');
+const { SESSION_COOKIE_NAME } = require('../../../util/sessionCookie');
 /**
  * @param {object} opts
  * @param {string}   [opts.SAML2_ROOT='/saml2']
@@ -51,6 +52,7 @@ function buildApp(opts = {}) {
     app.use(hppPrevent());
 
     app.use(session({
+        name: SESSION_COOKIE_NAME,
         secret: 'test-secret',
         resave: false,
         saveUninitialized: false,

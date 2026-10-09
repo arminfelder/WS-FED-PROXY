@@ -25,7 +25,7 @@ All configuration is done via environment variables.
 
 | Variable | Default | Description |
 |---|---|---|
-| `WSFED_ISSUER` | `https://localhost:3000/wsfed` | Full URI of this proxy's WS-Fed endpoint. Must match `AdfsIssuer` configured in Exchange. **Required in production.** |
+| `WSFED_ISSUER` | `https://localhost:3000/wsfed` | Full URI of this proxy's WS-Fed endpoint. Must match `AdfsIssuer` configured in Exchange. **Required in production.** Browsers must reach the proxy at this host: the SAML callback URL is derived from it, and the session cookie (`__Host-sid`: Secure, host-only, no `Domain`) is set for the host that served the request. |
 | `WSFED_CERT` | `exchange.crt` | Filename of the signing certificate (PEM), relative to `certs/` |
 | `WSFED_KEY` | `exchange.key` | Filename of the signing private key (PEM), relative to `certs/` |
 | `WSFED_PKCS7` | `exchange.p7b` | Filename of the signing certificate in PKCS#7 format, relative to `certs/`. Used by the ADFS SOAP metadata endpoint. |

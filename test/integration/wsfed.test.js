@@ -237,7 +237,7 @@ describe('GET /wsfed — token issuance on the authenticated return path', () =>
         expect(res.status).toBe(200);
         expect(res.text).toContain('token-issued');
         // must be cleared on the response carrying the token, not after it is sent
-        expect(String(res.headers['set-cookie'])).toMatch(/connect\.sid=;/);
+        expect(String(res.headers['set-cookie'])).toMatch(/__Host-sid=;/);
     });
 
     test('posts the token to wreply', async () => {
@@ -396,7 +396,7 @@ describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', 
         expect(res.headers['content-type']).toBe('image/gif');
         expect(res.headers['cache-control']).toBe('no-store');
         expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
-        expect(String(res.headers['set-cookie'])).toMatch(/connect\.sid=;/);
+        expect(String(res.headers['set-cookie'])).toMatch(/__Host-sid=;/);
     });
 
     test('does not contact the IdP', async () => {
@@ -435,7 +435,7 @@ describe('GET /wsfed?wa=wsignin1.0 — no second hop on this proxy', () => {
         const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM });
         expect(res.status).toBe(302);
         expect(res.headers.location).toBe('https://idp.example.com/sso?strategy=saml');
-        expect(String(res.headers['set-cookie'])).toMatch(/^connect\.sid=/);
+        expect(String(res.headers['set-cookie'])).toMatch(/^__Host-sid=/);
     });
 
     test('the stored arguments are in the session the callback will read', async () => {

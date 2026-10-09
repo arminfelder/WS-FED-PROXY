@@ -56,6 +56,42 @@ describe('Content-Security-Policy', () => {
     });
 });
 
+describe('session cookie', () => {
+    afterEach(() => {
+        delete process.env.TRUST_PROXY;
+    });
+
+    test('is __Host- prefixed: Secure, Path=/, no Domain, HttpOnly, SameSite=Strict', async () => {
+        // secure cookies are only set on a request Express sees as HTTPS
+        process.env.TRUST_PROXY = '1';
+        let proxied;
+        jest.isolateModules(() => { proxied = require('./helpers/buildFullApp')(); });
+        const res = await request(proxied)
+            .get('/wsfed')
+            .set('X-Forwarded-Proto', 'https')
+            .query({ wa: 'wsignin1.0', wtrealm: 'https://exchange.corp' });
+        expect(res.status).toBe(302);
+        const cookie = String(res.headers['set-cookie']);
+        expect(cookie).toMatch(/^__Host-sid=/);
+        expect(cookie).toMatch(/; Path=\//);
+        expect(cookie).toMatch(/; HttpOnly/);
+        expect(cookie).toMatch(/; Secure/);
+        expect(cookie).toMatch(/; SameSite=Strict/);
+        expect(cookie).not.toMatch(/Domain=/i);
+    });
+
+    test('is cleared under the same name when the token is issued or the user signs out', async () => {
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0' });
+        expect(res.status).toBe(200);
+        const cookie = String(res.headers['set-cookie']);
+        expect(cookie).toMatch(/^__Host-sid=; Path=\//);
+        // without Secure the browser drops a __Host- cookie, the expiry one included
+        expect(cookie).toMatch(/; Secure/);
+        expect(cookie).toMatch(/; HttpOnly/);
+        expect(cookie).toMatch(/; SameSite=Strict/);
+    });
+});
+
 describe('SAML request-ID cache', () => {
     test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
         const passport = require('passport');

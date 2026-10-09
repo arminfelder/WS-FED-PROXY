@@ -23,6 +23,7 @@ const path = require("path");
 const profileMapper = require("../util/OWAProfileMapper");
 const { isRealmAllowed, isWreplyAllowed } = require("../util/validateRedirect");
 const { logError } = require("../util/logError");
+const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require("../util/sessionCookie");
 const { metadataHandler } = require("../util/metadata");
 const { startSamlLogin } = require("../util/samlLogin");
 const router = express.Router();
@@ -108,7 +109,7 @@ function signOutCleanup(req, res, next, query) {
     }
     req.session.destroy(function (err) {
         if (err) { logError('session destroy failed', err, { 'http.request.id': req.requestId }); }
-        res.clearCookie("connect.sid");
+        res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
         res.set('Cache-Control', 'no-store');
         if (query.wreply) { return res.redirect(query.wreply); }
         res.set('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -217,7 +218,7 @@ router.get('/',(req,res,next)=>{
             if(err){
                 logError('session destroy failed', err, { 'http.request.id': req.requestId })
             }
-            res.clearCookie("connect.sid")
+            res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS)
             return callback(null, redirectUrl)
         });
     }

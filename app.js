@@ -36,6 +36,7 @@ const rateLimit = require('express-rate-limit');
 const { parseAllowedRealms } = require('./util/validateRedirect');
 const { parseTrustProxy } = require('./util/parseTrustProxy');
 const { parseIntEnv } = require('./util/parseIntEnv');
+const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require('./util/sessionCookie');
 // not exported from the package index
 const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
@@ -193,13 +194,13 @@ app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 app.use(hppPrevent());
 
 app.use(session({
+    name: SESSION_COOKIE_NAME,
     // `proxy` left unset so express-session inherits Express' `trust proxy`
+    // No `domain`: a host-only cookie is not sent to subdomains, and the
+    // __Host- prefix forbids the attribute.
     cookie: {
+        ...SESSION_COOKIE_OPTIONS,
         maxAge: 600000,
-        httpOnly: true,
-        secure: true,
-        sameSite: 'strict',
-        domain: new URL(app.get("WSFED_ISSUER")).hostname
     },
     saveUninitialized: false,
     store: new MemoryStore({
