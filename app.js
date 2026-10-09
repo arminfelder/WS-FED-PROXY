@@ -171,6 +171,10 @@ app.use(function ecsAccessLog(req, res, next) {
     };
     formatHttpRequest(rec, req);
     formatHttpResponse(rec, res);
+    // ecs-helpers copies every header. Cookie and Set-Cookie hold the session ID,
+    // which is a bearer credential until the token is issued.
+    delete rec.http.request.headers;
+    delete rec.http.response.headers;
     process.stdout.write(JSON.stringify(rec) + '\n');
   });
   next();

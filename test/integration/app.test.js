@@ -118,6 +118,28 @@ describe('SAML verify callback', () => {
     });
 });
 
+describe('access log', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    test('request and response headers are not logged: Cookie and Set-Cookie carry the session ID', async () => {
+        const lines = [];
+        jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => { lines.push(String(chunk)); return true; });
+        await request(app)
+            .get('/wsfed')
+            .query({ wa: 'wsignin1.0', wtrealm: 'https://exchange.corp' })
+            .set('Cookie', '__Host-sid=s%3Asecret-session-id');
+        const access = lines.map((l) => JSON.parse(l)).filter((r) => r.message === 'access_log');
+        expect(access).toHaveLength(1);
+        expect(access[0].http.request.headers).toBeUndefined();
+        expect(access[0].http.response.headers).toBeUndefined();
+        expect(JSON.stringify(access)).not.toContain('secret-session-id');
+        expect(JSON.stringify(access)).not.toMatch(/set-cookie/i);
+        // the fields the headers fed stay
+        expect(access[0].http.request.method).toBe('GET');
+        expect(access[0].http.response.status_code).toBe(302);
+    });
+});
+
 describe('SAML request-ID cache', () => {
     test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
         const passport = require('passport');
