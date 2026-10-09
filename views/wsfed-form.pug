@@ -12,5 +12,5 @@ html
       noscript
         p Script is disabled. Click Submit to continue.
         input(type='submit' value='Submit')
-    script.
+    script(nonce=cspNonce).
       document.forms[0].submit();
