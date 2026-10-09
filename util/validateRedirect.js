@@ -72,13 +72,19 @@ function isRealmAllowed(wtrealm, allowedOrigins) {
  *
  * An absent wreply is valid — the caller falls back to wtrealm, which
  * isRealmAllowed() has already checked. Otherwise wreply's origin must appear
- * in allowedOrigins.
+ * in allowedOrigins AND, when wtrealm is given, equal wtrealm's origin: the
+ * token names wtrealm as its audience, and WS-Federation 1.2 §13.2.2 makes
+ * wtrealm the realm "in which nobody (except the resource or authorized
+ * delegates) can control URLs". A wreply on another allowlisted origin would
+ * hand that realm's token to a different one.
  *
- * No same-origin-to-wtrealm fallback: both arrive in the same request from the
- * same caller, so comparing them to each other constrains nothing.
+ * The origin match is not a substitute for the allowlist: both values arrive
+ * in the same request from the same caller, so on their own they constrain
+ * nothing. Sign-out cleanup has no wtrealm and passes undefined; it gets the
+ * allowlist check only, as no token is involved.
  *
  * @param {string|undefined} wreply
- * @param {string} wtrealm
+ * @param {string|undefined} wtrealm
  * @param {string[]} allowedOrigins - from parseAllowedRealms()
  * @returns {boolean}
  */
@@ -87,7 +93,9 @@ function isWreplyAllowed(wreply, wtrealm, allowedOrigins) {
     if (!allowedOrigins || allowedOrigins.length === 0) return false;
     try {
         const wreplyOrigin = new URL(wreply).origin.toLowerCase();
-        return allowedOrigins.includes(wreplyOrigin);
+        if (!allowedOrigins.includes(wreplyOrigin)) return false;
+        if (wtrealm === undefined) return true;
+        return wreplyOrigin === new URL(wtrealm).origin.toLowerCase();
     } catch {
         return false;
     }

@@ -212,6 +212,19 @@ describe('GET /wsfed — wreply open-redirect prevention', () => {
         expect(res.status).toBe(403);
     });
 
+    test('blocks a wreply on another allowlisted origin than wtrealm', async () => {
+        // the token's audience is wtrealm; a second allowlisted host must not receive it
+        const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp,https://mail.example.com' });
+        const res = await request(app)
+            .get('/wsfed')
+            .query({
+                wa: 'wsignin1.0',
+                wtrealm: 'https://exchange.corp/owa',
+                wreply: 'https://mail.example.com/owa',
+            });
+        expect(res.status).toBe(403);
+    });
+
     test('allows wreply in allowlist', async () => {
         const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
         const res = await request(app)
