@@ -93,4 +93,4 @@ function isWreplyAllowed(wreply, wtrealm, allowedOrigins) {
     }
 }
 
-module.exports = { parseAllowedRealms, isRealmAllowed, isWreplyAllowed };
+module.exports = {parseAllowedRealms, isRealmAllowed, isWreplyAllowed};

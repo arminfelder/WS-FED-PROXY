@@ -1,0 +1,21 @@
+doctype html
+html
+  head
+    meta(charset='UTF-8')
+    meta(http-equiv='refresh' content='6;url=' + continueUrl)
+    title Signing out
+  body(data-next=continueUrl)
+    p Signing out...
+    each url in cleanupUrls
+      img(src=url alt='' width='1' height='1')
+    script(nonce=nonce).
+      (function () {
+        var images = document.images, left = images.length, done = false;
+        function go() { if (!done) { done = true; location.replace(document.body.getAttribute('data-next')); } }
+        function one() { left -= 1; if (left <= 0) { go(); } }
+        for (var i = 0; i < images.length; i++) {
+          if (images[i].complete) { one(); } else { images[i].onload = one; images[i].onerror = one; }
+        }
+        if (images.length === 0) { go(); }
+        setTimeout(go, 5000);
+      })();

@@ -54,12 +54,13 @@ All configuration is done via environment variables.
 
 | Path | Description |
 |---|---|
-| `{WSFED_ROOT}` | WS-Fed passive sign-in / sign-out entry point |
+| `{WSFED_ROOT}` | WS-Fed passive sign-in / sign-out entry point. `wsignout1.0` accepts an allowlisted `wreply`; a sign-out request not started by the proxy or an allowlisted RP gets a confirmation page. |
 | `{WSFED_ROOT}/FederationMetadata/2007-06/FederationMetadata.xml` | WS-Fed metadata document (used by Exchange for discovery) |
 | `{WSFED_ROOT}/adfs/fs/federationserverservice.asmx` | ADFS SOAP endpoint (returns signing cert thumbprint to Exchange) |
 | `{SAML2_ROOT}/login` | Initiates SAML2 authentication |
-| `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding) |
-| `{SAML2_ROOT}/logout` | Initiates SAML2 logout. Reachable only via `{WSFED_ROOT}?wa=wsignout1.0`, which sets a single-use session flag; a direct or cross-origin request returns `403` so a third-party page cannot force a single logout. |
+| `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding). Also accepts a POSTed `LogoutResponse`. |
+| `{SAML2_ROOT}/logout` | Sends the SAML2 `LogoutRequest`. Reachable only with the one-time `state` that `{WSFED_ROOT}?wa=wsignout1.0` issues; a signed-in request without it returns `403`, and an expired or unknown `state` returns `400` "Sign-out not complete". |
+| `{SAML2_ROOT}/logout/callback` | IdP `LogoutResponse` (GET with `Signature`, or signed POST). Configure it as the IdP's single-logout URL for this client. |
 
 ## Logging
 
