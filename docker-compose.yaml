@@ -57,4 +57,7 @@ services:
     - "5005:8787"
     volumes:
       - ./realm.json:/tmp/realm.json
+      # Fixed TLS cert, the same as nginx (SAN IP:192.168.102.1). Without it Keycloak makes a new self-signed cert per container.
+      - ./certs/nginx.crt:/etc/x509/https/tls.crt:ro
+      - ./certs/nginx.key:/etc/x509/https/tls.key:ro
 

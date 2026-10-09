@@ -24,6 +24,7 @@ const profileMapper = require("../util/OWAProfileMapper");
 const { isRealmAllowed, isWreplyAllowed } = require("../util/validateRedirect");
 const { logError } = require("../util/logError");
 const { metadataHandler } = require("../util/metadata");
+const { startSamlLogin } = require("../util/samlLogin");
 const router = express.Router();
 
 const certsDir = path.join(__dirname, '../certs');
@@ -130,8 +131,8 @@ function signIn(req, res, next, query) {
         return next(createError(400, `wfresh must be a whole number of minutes from 0 to ${MAX_WFRESH_MINUTES}`));
     }
     req.session.wsfed_args = { ...query, authRequestedAt: Date.now() };
-    req.session.save();
-    res.redirect(req.app.get("SAML2_ROOT") + "/login");
+    // express-session stores the session before the redirect is sent
+    return startSamlLogin(req, res, next);
 }
 
 // No wa: the return from /saml2/callback, which redirects to the bare WSFED_ROOT.
@@ -151,8 +152,7 @@ function continueSignIn(req, res, next) {
         if (freshness === "reauth") {
             args.reauthRequested = true;
             args.authRequestedAt = Date.now();
-            req.session.save();
-            return res.redirect(req.app.get("SAML2_ROOT") + "/login");
+            return startSamlLogin(req, res, next);
         }
         if (freshness === "stale") {
             return next(createError(403, `authentication is older than wfresh=${args.wfresh}`));

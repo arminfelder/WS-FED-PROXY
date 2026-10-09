@@ -1,5 +1,18 @@
 const request = require('supertest');
 
+// No SAML strategy is registered in buildApp. The stub redirects to a fake IdP
+// and records the strategy and the stored arguments it saw.
+jest.mock('passport', () => {
+    const original = jest.requireActual('passport');
+    return {
+        ...original,
+        authenticate: jest.fn((strategy) => (req, res) => {
+            res.redirect(`https://idp.example.com/sso?strategy=${strategy}`);
+        }),
+    };
+});
+
+
 // Mock wsfed and fs so route tests don't need real certs
 jest.mock('wsfed', () => {
     const auth = jest.fn((opts) => (req, res, next) => {
@@ -75,7 +88,7 @@ describe('GET /wsfed — unauthenticated requests', () => {
             .get('/wsfed')
             .query({ wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa' });
         expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.headers.location).toMatch('https://idp.example.com/sso');
     });
 
     test('redirects to SAML2 logout when wa=wsignout1.0', async () => {
@@ -103,7 +116,7 @@ describe('GET /wsfed — HTTP Parameter Pollution resistance', () => {
         // Must not redirect to SAML login with an attacker-controlled realm
         expect(res.status).not.toBe(500);
         if (res.status === 302) {
-            expect(res.headers.location).toMatch('/saml2/login');
+            expect(res.headers.location).toMatch('https://idp.example.com/sso');
         }
     });
 
@@ -127,7 +140,7 @@ describe('GET /wsfed — wtrealm allowlist enforcement', () => {
             .get('/wsfed')
             .query({ wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa' });
         expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.headers.location).toMatch('https://idp.example.com/sso');
     });
 
     test('blocks request when wtrealm is NOT in WSFED_ALLOWED_REALMS', async () => {
@@ -170,7 +183,7 @@ describe('GET /wsfed — wreply open-redirect prevention', () => {
                 wreply: 'https://exchange.corp/auth/callback',
             });
         expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.headers.location).toMatch('https://idp.example.com/sso');
     });
 
     test('an attacker-chosen wtrealm cannot vouch for its own wreply', async () => {
@@ -209,7 +222,7 @@ describe('GET /wsfed — wreply open-redirect prevention', () => {
                 wreply: 'https://exchange.corp/auth/cb',
             });
         expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.headers.location).toMatch('https://idp.example.com/sso');
     });
 });
 
@@ -297,7 +310,7 @@ describe('GET /wsfed — wa dispatch (WS-Federation 1.2 §13.2.1, §17)', () => 
         });
         const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM });
         expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.headers.location).toMatch('https://idp.example.com/sso');
     });
 });
 
@@ -315,7 +328,7 @@ describe('GET /wsfed — wfresh (WS-Federation 1.2 §13.2.2)', () => {
         const app = buildApp();
         const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM, wfresh: '5' });
         expect(res.status).toBe(302);
-        expect(res.headers.location).toMatch('/saml2/login');
+        expect(res.headers.location).toMatch('https://idp.example.com/sso');
     });
 
     test('issues the token when the authentication is fresh enough', async () => {
@@ -338,7 +351,7 @@ describe('GET /wsfed — wfresh (WS-Federation 1.2 §13.2.2)', () => {
         });
         const first = await request(app).get('/wsfed');
         expect(first.status).toBe(302);
-        expect(first.headers.location).toMatch('/saml2/login');
+        expect(first.headers.location).toMatch('https://idp.example.com/sso');
         expect(args.reauthRequested).toBe(true);
 
         const second = await request(app).get('/wsfed');
@@ -403,5 +416,51 @@ describe('GET /wsfed — wa=wsignoutcleanup1.0 (WS-Federation 1.2 §13.2.4.2)', 
         const app = buildApp();
         const res = await request(app).get('/wsfed').query({ wa: 'wsignoutcleanup1.0', wreply: 'https://attacker.tld/' });
         expect(res.status).toBe(403);
+    });
+});
+
+describe('GET /wsfed?wa=wsignin1.0 — no second hop on this proxy', () => {
+    // The sign-in arrives through a redirect from the RP, usually another site.
+    // Firefox omits SameSite cookies on every later hop of that redirect chain,
+    // so the session must be set and the AuthnRequest sent in one response.
+    const REALM = 'https://exchange.corp/owa';
+    // beforeEach resets the module registry: take the stub the routes of this app use
+    const appWithPassport = () => {
+        const app = buildApp();
+        return { app, passport: require('passport') };
+    };
+
+    test('sends the browser to the IdP and sets the session cookie in the same response', async () => {
+        const { app } = appWithPassport();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM });
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toBe('https://idp.example.com/sso?strategy=saml');
+        expect(String(res.headers['set-cookie'])).toMatch(/^connect\.sid=/);
+    });
+
+    test('the stored arguments are in the session the callback will read', async () => {
+        const { app, passport } = appWithPassport();
+        const agent = request.agent(app);
+        await agent.get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM, wctx: 'c' });
+        let seen;
+        passport.authenticate.mockImplementationOnce(() => (req, res) => {
+            seen = req.session.wsfed_args;
+            res.end();
+        });
+        await agent.get('/saml2/login');
+        expect(seen).toMatchObject({ wa: 'wsignin1.0', wtrealm: REALM, wctx: 'c' });
+    });
+
+    test('wfresh=0 asks for ForceAuthn without a second hop', async () => {
+        const { app } = appWithPassport();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM, wfresh: '0' });
+        expect(res.headers.location).toBe('https://idp.example.com/sso?strategy=saml-force');
+    });
+
+    test('a refused realm never reaches the IdP', async () => {
+        const { app, passport } = appWithPassport();
+        const res = await request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: 'https://attacker.tld' });
+        expect(res.status).toBe(403);
+        expect(passport.authenticate).not.toHaveBeenCalled();
     });
 });

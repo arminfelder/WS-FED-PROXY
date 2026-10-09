@@ -383,7 +383,7 @@
     "emailVerified" : false,
     "attributes" : {
       "upn" : [ "Administrator@corp.contoso.com" ],
-      "sid" : [ "S-1-5-21-22116541-2774709070-4009198143-500" ]
+      "sid" : [ "S-1-5-21-1903757798-3017467243-2349843341-500" ]
     },
     "credentials" : [ {
       "id" : "bfdfeb44-302e-402b-a076-59e0fb9147c4",
