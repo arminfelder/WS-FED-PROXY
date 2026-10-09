@@ -44,6 +44,18 @@ describe('error page', () => {
     });
 });
 
+describe('Content-Security-Policy', () => {
+    const scriptSrc = (res) => /script-src ([^;]*)/.exec(res.headers['content-security-policy'])[1];
+
+    test('script-src is a per-response nonce, not unsafe-inline', async () => {
+        const first = await request(app).get('/nope');
+        const second = await request(app).get('/nope');
+        expect(scriptSrc(first)).toMatch(/^'nonce-[A-Za-z0-9+/=]{22,}'$/);
+        expect(scriptSrc(first)).not.toBe(scriptSrc(second));
+        expect(scriptSrc(first)).not.toContain('unsafe-inline');
+    });
+});
+
 describe('SAML request-ID cache', () => {
     test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
         const passport = require('passport');

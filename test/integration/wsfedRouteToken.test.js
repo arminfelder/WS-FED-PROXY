@@ -157,6 +157,12 @@ describe('token response form (WS-Federation 1.2 §13.6.2)', () => {
         expect(verifySignature(wresult)).toBe(true);
     });
 
+    test('the auto-submit script carries the CSP nonce of the response', async () => {
+        const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM });
+        expect(res.text).toMatch(/<script nonce="test-nonce">\s*document\.forms\[0\]\.submit\(\);/);
+        expect(res.text.match(/<script/g)).toHaveLength(1);
+    });
+
     test('the form submits without eval', async () => {
         const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM });
         expect(res.text).toContain('document.forms[0].submit();');

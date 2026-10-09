@@ -57,6 +57,9 @@ function buildApp(opts = {}) {
         cookie: { secure: false },
     }));
 
+    // app.js sets a random CSP nonce per response; a fixed one lets tests assert it on the page
+    app.use((req, res, next) => { res.locals.cspNonce = 'test-nonce'; next(); });
+
     // Stub passport so we can control isAuthenticated() without a real SAML strategy.
     // isAuthenticated/logout mirror what passport.initialize() provides in app.js.
     let authenticated = !!opts.authenticated;

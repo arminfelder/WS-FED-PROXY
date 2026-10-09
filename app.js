@@ -40,10 +40,15 @@ const { parseIntEnv } = require('./util/parseIntEnv');
 const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
 
+// Only the auto-submit line in views/wsfed-form.pug runs script; it carries this nonce.
+app.use(function cspNonce(_req, res, next) {
+    res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+    next();
+});
 app.use(helmet.contentSecurityPolicy({
     directives: {
         defaultSrc: ["'none'"],
-        scriptSrc:  ["'unsafe-inline'"],
+        scriptSrc:  [(_req, res) => `'nonce-${res.locals.cspNonce}'`],
         // Allow the form POST to any HTTPS target — the allowlist in validateRedirect.js
         // enforces the actual destination; CSP here just blocks non-HTTPS targets.
         formAction: ["https:"],
