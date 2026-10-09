@@ -7,6 +7,14 @@ backup
 share
 e2e
 realm.json
+
+# Local-stack files. A developer .env can hold SESSION_SECRET or KC_ADMIN_PW;
+# the Dockerfile copies the whole context into the runtime image.
+.env
+.env.*
+docker-compose.yaml
+nginx.conf
+deploy
 Dockerfile
 *.md
 
