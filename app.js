@@ -21,7 +21,6 @@ const http = require('http');
 const path = require('path');
 const { formatHttpRequest, formatHttpResponse, formatError } = require('@elastic/ecs-helpers');
 const crypto_internal = require('crypto');
-const sidConverter = require('security-identifier');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session)
 const wsfed = require("wsfed");
@@ -37,6 +36,7 @@ const { parseAllowedRealms } = require('./util/validateRedirect');
 const { parseTrustProxy } = require('./util/parseTrustProxy');
 const { parseIntEnv } = require('./util/parseIntEnv');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require('./util/sessionCookie');
+const { userFromProfile, ClaimError } = require('./util/samlProfile');
 // not exported from the package index
 const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
@@ -83,7 +83,12 @@ const wsfedRouter = require('./routes/wsfed');
     app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auth/realms/master/protocol/saml');
     app.set("SAML2_CLAIMS_UPN",process.env.SAML2_CLAIMS_UPN || "upn");
     app.set("SAML2_CLAIMS_SID", process.env.SAML2_CLAIMS_SID || "sid");
-    app.set("SAML2_CLAIMS_SID_BASE64", process.env.SAML2_CLAIMS_SID_BASE64 || "true" )
+    const sidBase64 = (process.env.SAML2_CLAIMS_SID_BASE64 || "true").trim().toLowerCase();
+    if (sidBase64 !== "true" && sidBase64 !== "false") {
+        console.error('FATAL: SAML2_CLAIMS_SID_BASE64 must be "true" or "false"');
+        process.exit(1);
+    }
+    app.set("SAML2_CLAIMS_SID_BASE64", sidBase64 === "true");
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
     // expected <Issuer> of IdP responses; node-saml does not check it when empty
     app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");
@@ -280,33 +285,18 @@ if (app.get("SAML2_IDP_ISSUER") !== "") {
 }
 
 function samlVerify(profile, done) {
-        const user = {};
-        user.id = profile["nameID"];
-        user.upn = profile[app.get("SAML2_CLAIMS_UPN")];
-        user.nameID = profile["nameID"];
-        user.nameIDFormat = profile["nameIDFormat"];
-        // node-saml puts these in the IdP LogoutRequest
-        user.nameQualifier = profile.nameQualifier;
-        user.spNameQualifier = profile.spNameQualifier;
-        user.sessionIndex = profile.sessionIndex;
-        // wfresh compares this with the requested maximum age (WS-Federation 1.2 §13.2.2)
-        const assertion = typeof profile.getAssertion === 'function' ? profile.getAssertion() : undefined;
-        const authnStatement = assertion && assertion.Assertion && assertion.Assertion.AuthnStatement;
-        user.authnInstant = authnStatement && authnStatement[0].$ ? authnStatement[0].$.AuthnInstant : undefined;
-        // the issued token must not outlive the IdP session (routes/wsfed.js tokenLifetime)
-        user.sessionNotOnOrAfter = authnStatement && authnStatement[0].$ ? authnStatement[0].$.SessionNotOnOrAfter : undefined;
-        if(profile.hasOwnProperty(app.get("SAML2_CLAIMS_SID"))){
-            let sid = "";
-            if(app.get("SAML2_CLAIMS_SID_BASE64").toLowerCase() === "true"){
-                const sid_binary = Buffer.from(profile[app.get("SAML2_CLAIMS_SID")], 'base64');
-                sid = sidConverter.sidBufferToString(sid_binary)
-            }else {
-                sid = profile[app.get("SAML2_CLAIMS_SID")]
-            }
-            user.sid =  sid;
+        let user;
+        try {
+            user = userFromProfile(profile, {
+                upnAttribute: app.get("SAML2_CLAIMS_UPN"),
+                sidAttribute: app.get("SAML2_CLAIMS_SID"),
+                sidBase64:    app.get("SAML2_CLAIMS_SID_BASE64"),
+            });
+        } catch (err) {
+            // refused assertion, not a server error: /saml2/callback logs the message
+            if (err instanceof ClaimError) return done(null, false, { message: err.message });
+            return done(err);
         }
-
-
         return done(null, user);
 }
 

@@ -92,6 +92,32 @@ describe('session cookie', () => {
     });
 });
 
+describe('SAML verify callback', () => {
+    const verify = (profile) => new Promise((resolve) => {
+        require('passport')._strategy('saml')._signonVerify(profile, (err, user, info) => resolve({ err, user, info }));
+    });
+    const withAttributes = (attrs) => ({
+        nameID: 'alice',
+        getAssertion: () => ({ Assertion: { AttributeStatement: [{
+            Attribute: Object.entries(attrs).map(([name, v]) => ({ $: { Name: name }, AttributeValue: [{ _: v }] })),
+        }] } }),
+    });
+
+    test('refuses an assertion without the required claims instead of issuing a token for it', async () => {
+        const { err, user, info } = await verify(withAttributes({ upn: 'alice@example.com' }));
+        expect(err).toBeNull();
+        expect(user).toBe(false);
+        expect(info.message).toMatch(/SID/);
+    });
+
+    test('accepts a complete assertion', async () => {
+        const sid = require('security-identifier').sidStringToBuffer('S-1-5-21-1-2-3-500').toString('base64');
+        const { err, user } = await verify(withAttributes({ upn: 'alice@example.com', sid }));
+        expect(err).toBeNull();
+        expect(user).toMatchObject({ id: 'alice', upn: 'alice@example.com', sid: 'S-1-5-21-1-2-3-500' });
+    });
+});
+
 describe('SAML request-ID cache', () => {
     test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
         const passport = require('passport');

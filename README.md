@@ -41,9 +41,9 @@ All configuration is done via environment variables.
 | `SAML2_IDP_PUB_KEY` | `idp.pem` | Filename of the IdP's public key/certificate (PEM), relative to `certs/` |
 | `SAML2_ISSUER` | `passport-js` | SAML2 `Issuer` sent in the `AuthnRequest` to the IdP |
 | `SAML2_IDENTIFIER_FORMAT` | `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified` | NameID format requested from the IdP |
-| `SAML2_CLAIMS_UPN` | `upn` | Name of the SAML2 attribute holding the User Principal Name |
-| `SAML2_CLAIMS_SID` | `sid` | Name of the SAML2 attribute holding the Windows SID |
-| `SAML2_CLAIMS_SID_BASE64` | `true` | Set to `false` if the IdP sends the SID as a plain string rather than base64-encoded binary |
+| `SAML2_CLAIMS_UPN` | `upn` | Name of the SAML2 attribute holding the User Principal Name. **Required in every assertion**: Exchange claims-based authentication needs the UPN and primary SID claims ([Microsoft Learn](https://learn.microsoft.com/exchange/clients/outlook-on-the-web/ad-fs-claims-based-auth), step 4b). An assertion without it, with an empty value, or with more than one value (also across repeated `<Attribute>` elements) is refused (`/saml2/failure`, logged as `saml assertion rejected`). |
+| `SAML2_CLAIMS_SID` | `sid` | Name of the SAML2 attribute holding the Windows SID. **Required**, like the UPN; the value must decode to a well-formed SID (`S-1-…`) or the assertion is refused. |
+| `SAML2_CLAIMS_SID_BASE64` | `true` | `true` if the IdP sends the SID as base64-encoded binary, `false` if it sends the textual `S-1-…` form. Any other value stops the proxy at startup. |
 | `SAML2_ROOT` | `/saml2` | URL path prefix for SAML2 endpoints |
 | `SAML2_AUDIENCE` | value of `SAML2_ISSUER` | Audience the IdP's assertion must be scoped to. |
 | `SAML2_CLOCK_SKEW_MS` | `3000` | Tolerance for clock drift between the IdP and this proxy when checking assertion validity windows. |
