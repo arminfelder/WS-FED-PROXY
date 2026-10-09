@@ -110,3 +110,66 @@ describe('GET /saml2/callback (dead route removed)', () => {
         expect(res.status).toBe(404);
     });
 });
+
+describe('RelayState binds the SAML response to the sign-in session', () => {
+    const passport = require('passport');
+    const REALM = 'https://exchange.corp';
+
+    // mints the session nonce through /login and returns it together with the one sent to the IdP
+    async function startSignIn(agent) {
+        await agent.get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: REALM });
+        passport.authenticate.mockImplementationOnce((strategy, opts) => (req, res) => {
+            res.json({ session: req.session.saml_relay, sent: opts.additionalParams.RelayState });
+        });
+        const res = await agent.get('/saml2/login');
+        return res.body;
+    }
+
+    beforeEach(() => passport.authenticate.mockClear());
+
+    test('/login stores a fresh nonce in the session and sends the same value as RelayState', async () => {
+        const first = await startSignIn(request.agent(buildApp()));
+        expect(first.sent).toBe(first.session);
+        expect(first.sent).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        const second = await startSignIn(request.agent(buildApp()));
+        expect(second.sent).not.toBe(first.sent);
+    });
+
+    test('a response with the matching RelayState reaches passport', async () => {
+        const agent = request.agent(buildApp());
+        const { sent } = await startSignIn(agent);
+        await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent });
+        const callbackCalls = passport.authenticate.mock.calls.filter((c) => c[2] !== undefined);
+        expect(callbackCalls).toHaveLength(1);
+        expect(callbackCalls[0][0]).toBe('saml');
+    });
+
+    test.each([
+        ['missing', {}],
+        ['wrong', { RelayState: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }],
+        ['repeated', { RelayState: ['x', 'y'] }],
+    ])('a response with a %s RelayState is refused while a sign-in is pending', async (_label, fields) => {
+        const agent = request.agent(buildApp());
+        await startSignIn(agent);
+        passport.authenticate.mockClear();
+        const res = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', ...fields });
+        expect(res.status).toBe(403);
+        expect(passport.authenticate).not.toHaveBeenCalled();
+    });
+
+    test('the nonce is single-use: a refused attempt burns it', async () => {
+        const agent = request.agent(buildApp());
+        const { sent } = await startSignIn(agent);
+        await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: 'wrong' });
+        passport.authenticate.mockClear();
+        const res = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent });
+        expect(res.status).toBe(403);
+        expect(passport.authenticate).not.toHaveBeenCalled();
+    });
+
+    test('without a pending sign-in the response passes through (IdP logout messages, stray responses)', async () => {
+        await request(buildApp()).post('/saml2/callback').type('form').send({ SAMLResponse: 'x' });
+        expect(passport.authenticate).toHaveBeenCalledTimes(1);
+        expect(passport.authenticate.mock.calls[0][0]).toBe('saml');
+    });
+});

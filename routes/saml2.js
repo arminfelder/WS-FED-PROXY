@@ -19,7 +19,7 @@ const express = require('express');
 const createError = require('http-errors');
 const passport = require("passport");
 const { logError } = require("../util/logError");
-const { startSamlLogin } = require("../util/samlLogin");
+const { startSamlLogin, relayStateMatches } = require("../util/samlLogin");
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require("../util/sessionCookie");
 const router = express.Router();
 
@@ -78,6 +78,16 @@ router.get('/failure',function(req, res, next) {
 
 
 router.post('/callback', function (req, res, next) {
+    // A pending sign-in accepts only the response to its own request. Without one
+    // there is nothing to take over: a stray response ends in signOut at WSFED_ROOT,
+    // and IdP logout messages carry no sign-in RelayState.
+    if (req.session && req.session.wsfed_args !== undefined) {
+        const expected = req.session.saml_relay;
+        delete req.session.saml_relay;
+        if (!relayStateMatches(req.body && req.body.RelayState, expected)) {
+            return next(createError(403, 'SAML response does not belong to this sign-in'));
+        }
+    }
     // custom callback instead of failureRedirect: it also catches the case where
     // the strategy declines without an error, which would otherwise be unlogged
     passport.authenticate("saml", { keepSessionInfo: true }, function (err, user, info) {

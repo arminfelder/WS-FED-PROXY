@@ -15,7 +15,22 @@ GNU General Public License for more details.
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+const crypto = require('crypto');
 const passport = require('passport');
+
+// node-saml's InResponseTo cache is shared by all sessions, so it cannot tell
+// whose sign-in a response answers. RelayState is echoed by the IdP and is
+// compared with the value this session sent (SAML 2.0 bindings §3.5.3, max 80 bytes).
+function newRelayState() {
+    return crypto.randomBytes(32).toString('base64url');
+}
+
+function relayStateMatches(received, expected) {
+    if (typeof received !== 'string' || typeof expected !== 'string') return false;
+    const a = Buffer.from(received);
+    const b = Buffer.from(expected);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 /**
  * Sends the browser to the IdP with an AuthnRequest.
@@ -31,9 +46,12 @@ function startSamlLogin(req, res, next) {
     const args = req.session.wsfed_args;
     // ForceAuthn makes the IdP prompt again (WS-Federation 1.2 §13.2.2, wfresh)
     const strategy = args && (args.wfresh === "0" || args.reauthRequested) ? "saml-force" : "saml";
+    const relayState = newRelayState();
+    req.session.saml_relay = relayState;
     return passport.authenticate(strategy, {
         failureRedirect: req.app.get("SAML2_ROOT") + "/failure",
+        additionalParams: { RelayState: relayState },
     })(req, res, next);
 }
 
-module.exports = { startSamlLogin };
+module.exports = { startSamlLogin, relayStateMatches };
