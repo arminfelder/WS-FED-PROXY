@@ -333,10 +333,14 @@ describe('RelayState binds the SAML response to the sign-in session', () => {
         expect(newest.status).toBe(200);
     });
 
-    test('an IdP LogoutRequest (SAMLRequest) is not checked against a sign-in', async () => {
-        await request(buildApp()).post('/saml2/callback').type('form').send({ SAMLRequest: 'x' });
-        expect(passport.authenticate).toHaveBeenCalledTimes(1);
-        expect(passport.authenticate.mock.calls[0][0]).toBe('saml');
+    // Logout messages have their own endpoint with the SAML2_SLO gate and the sign-out record.
+    test.each([
+        ['a LogoutRequest (SAMLRequest)', { SAMLRequest: 'x' }],
+        ['no SAML message', {}],
+    ])('%s is refused with 400 before the strategy runs', async (_name, body) => {
+        const res = await request(buildApp()).post('/saml2/callback').type('form').send(body);
+        expect(res.status).toBe(400);
+        expect(passport.authenticate).not.toHaveBeenCalled();
     });
 });
 
