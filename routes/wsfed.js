@@ -207,6 +207,8 @@ router.get('/',(req,res,next)=>{
         // Context is outside the signed assertion, so the signature stays valid.
         const context = args.wctx === undefined ? '' : `Context="${escapeAttribute(args.wctx)}" `;
         wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, `<t:RequestSecurityTokenResponse ${context}`);
+        // The page holds a bearer token. A cached or bfcache copy would re-post it.
+        res.set('Cache-Control', 'no-store');
         res.render('wsfed-form', { callback: postUrl, wresult, wctx: args.wctx });
     },
     getPostURL: function (_wtrealm, _wreply, req, callback) {

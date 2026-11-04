@@ -163,6 +163,12 @@ describe('token response form (WS-Federation 1.2 §13.6.2)', () => {
         expect(res.text.match(/<script/g)).toHaveLength(1);
     });
 
+    test('the token page is not cacheable: a cached copy would re-post the token', async () => {
+        const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM });
+        expect(res.status).toBe(200);
+        expect(res.headers['cache-control']).toBe('no-store');
+    });
+
     test('the form submits without eval', async () => {
         const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM });
         expect(res.text).toContain('document.forms[0].submit();');
