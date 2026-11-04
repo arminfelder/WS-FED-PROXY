@@ -19,7 +19,7 @@ const express = require('express');
 const createError = require('http-errors');
 const passport = require("passport");
 const { logError } = require("../util/logError");
-const { startSamlLogin } = require("../util/samlLogin");
+const { startSamlLogin, takeSignIn } = require("../util/samlLogin");
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require("../util/sessionCookie");
 const router = express.Router();
 
@@ -78,6 +78,21 @@ router.get('/failure',function(req, res, next) {
 
 
 router.post('/callback', function (req, res, next) {
+    // Every response must carry the RelayState of a sign-in that this session started.
+    // With SESSION_SAMESITE=none, any site can POST to this URL with the session cookie.
+    // Without the check, a response for another user could go into this session (login CSRF).
+    // An IdP LogoutRequest is a SAMLRequest, so this check does not apply to it.
+    if (req.body && req.body.SAMLResponse !== undefined) {
+        const taken = takeSignIn(req.session, req.body.RelayState);
+        if (!taken.found) {
+            return next(createError(403, 'SAML response does not belong to a sign-in of this session'));
+        }
+        if (taken.args) {
+            req.session.wsfed_args = taken.args;
+        } else {
+            delete req.session.wsfed_args;
+        }
+    }
     // custom callback instead of failureRedirect: it also catches the case where
     // the strategy declines without an error, which would otherwise be unlogged
     passport.authenticate("saml", { keepSessionInfo: true }, function (err, user, info) {

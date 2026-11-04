@@ -110,3 +110,109 @@ describe('GET /saml2/callback (dead route removed)', () => {
         expect(res.status).toBe(404);
     });
 });
+
+describe('RelayState binds the SAML response to the sign-in session', () => {
+    const passport = require('passport');
+    const { MAX_PENDING_SIGNINS } = require('../../util/samlLogin');
+    const REALM = 'https://exchange.corp';
+
+    // starts a sign-in through wsignin1.0 and returns the RelayState that went to the IdP
+    async function startSignIn(agent, wtrealm = REALM) {
+        let sent;
+        passport.authenticate.mockImplementationOnce((strategy, opts) => (req, res) => {
+            sent = opts.additionalParams.RelayState;
+            res.redirect('https://idp.example.com/saml');
+        });
+        await agent.get('/wsfed').query({ wa: 'wsignin1.0', wtrealm });
+        return sent;
+    }
+    // the stubbed strategy accepts the response; report which wsfed_args the session then holds
+    function acceptResponse() {
+        passport.authenticate.mockImplementationOnce(() => (req, res) => res.json({ args: req.session.wsfed_args || null }));
+    }
+
+    beforeEach(() => passport.authenticate.mockClear());
+
+    test('each sign-in sends a fresh 256-bit RelayState', async () => {
+        const first = await startSignIn(request.agent(buildApp()));
+        const second = await startSignIn(request.agent(buildApp()));
+        expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(second).not.toBe(first);
+    });
+
+    test('a response with the matching RelayState reaches passport and is not refused', async () => {
+        const agent = request.agent(buildApp());
+        const sent = await startSignIn(agent);
+        acceptResponse();
+        const res = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent });
+        expect(res.status).toBe(200);
+        expect(res.body.args.wtrealm).toBe(REALM);
+    });
+
+    test.each([
+        ['missing', {}],
+        ['wrong', { RelayState: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }],
+        ['repeated', { RelayState: ['x', 'y'] }],
+    ])('a response with a %s RelayState is refused', async (_label, fields) => {
+        const agent = request.agent(buildApp());
+        await startSignIn(agent);
+        passport.authenticate.mockClear();
+        const res = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', ...fields });
+        expect(res.status).toBe(403);
+        expect(passport.authenticate).not.toHaveBeenCalled();
+    });
+
+    test('a response without any sign-in of this session is refused (login CSRF)', async () => {
+        const res = await request(buildApp()).post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: 'y' });
+        expect(res.status).toBe(403);
+        expect(passport.authenticate).not.toHaveBeenCalled();
+    });
+
+    test('a refused response leaves the pending sign-in usable', async () => {
+        const agent = request.agent(buildApp());
+        const sent = await startSignIn(agent);
+        await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: 'wrong' });
+        acceptResponse();
+        const res = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent });
+        expect(res.status).toBe(200);
+    });
+
+    test('each RelayState works one time only', async () => {
+        const agent = request.agent(buildApp());
+        const sent = await startSignIn(agent);
+        acceptResponse();
+        await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent });
+        const res = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent });
+        expect(res.status).toBe(403);
+    });
+
+    test('two tabs: each response gets the wtrealm of its own sign-in', async () => {
+        const agent = request.agent(buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp,https://other.corp' }));
+        const tabA = await startSignIn(agent, 'https://exchange.corp/owa/');
+        const tabB = await startSignIn(agent, 'https://other.corp/ecp/');
+        acceptResponse();
+        const resA = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: tabA });
+        acceptResponse();
+        const resB = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: tabB });
+        expect(resA.body.args.wtrealm).toBe('https://exchange.corp/owa/');
+        expect(resB.body.args.wtrealm).toBe('https://other.corp/ecp/');
+    });
+
+    test(`only the newest ${MAX_PENDING_SIGNINS} pending sign-ins are kept`, async () => {
+        const agent = request.agent(buildApp());
+        const sent = [];
+        for (let i = 0; i <= MAX_PENDING_SIGNINS; i++) sent.push(await startSignIn(agent));
+        const oldest = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent[0] });
+        expect(oldest.status).toBe(403);
+        acceptResponse();
+        const newest = await agent.post('/saml2/callback').type('form').send({ SAMLResponse: 'x', RelayState: sent[MAX_PENDING_SIGNINS] });
+        expect(newest.status).toBe(200);
+    });
+
+    test('an IdP LogoutRequest (SAMLRequest) is not checked against a sign-in', async () => {
+        await request(buildApp()).post('/saml2/callback').type('form').send({ SAMLRequest: 'x' });
+        expect(passport.authenticate).toHaveBeenCalledTimes(1);
+        expect(passport.authenticate.mock.calls[0][0]).toBe('saml');
+    });
+});
+

@@ -21,6 +21,29 @@ const SESSION_COOKIE_NAME = '__Host-sid';
 // Use on every Set-Cookie, the expiry from clearCookie() included.
 // Express clearCookie() adds only Path and Expires. Without Secure, the browser
 // ignores that expiry cookie and keeps the session cookie.
-const SESSION_COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: 'strict' };
+let sameSite;
+try {
+    sameSite = parseSameSite(process.env.SESSION_SAMESITE);
+} catch (err) {
+    // same fail-closed startup as the other settings in app.js
+    console.error(`FATAL: ${err.message}`);
+    process.exit(1);
+}
+const SESSION_COOKIE_OPTIONS = Object.freeze({ httpOnly: true, secure: true, sameSite });
 
-module.exports = { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS };
+/**
+ * none: an IdP on another site can POST its response to /saml2/callback with the session cookie.
+ * strict and lax: the IdP must be on the same site as this proxy. Lax also blocks a cross-site POST.
+ * The RelayState check in routes/saml2.js binds each response to its session, for all three values.
+ *
+ * @throws {Error} if the value is not "strict", "lax" or "none"
+ */
+function parseSameSite(raw) {
+    const value = (raw === undefined || raw.trim() === '' ? 'none' : raw).trim().toLowerCase();
+    if (!['strict', 'lax', 'none'].includes(value)) {
+        throw new Error(`SESSION_SAMESITE must be "strict", "lax" or "none", not "${raw}"`);
+    }
+    return value;
+}
+
+module.exports = { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS, parseSameSite };

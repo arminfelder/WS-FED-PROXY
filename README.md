@@ -17,6 +17,7 @@ All configuration is done via environment variables.
 | `PORT` | `3000` | Listening port |
 | `TRUST_PROXY` | `0` | **Number of reverse-proxy hops** in front of the app. Drives Express' `trust proxy`, so `req.ip`, the rate limiters and the secure-cookie check read the real client. `0` trusts nothing; use `1` behind a single nginx. The legacy values `true`/`false` are still accepted and mean `1`/`0`. The proxy must send `X-Forwarded-For` — otherwise every request appears to come from the proxy and the per-client rate limits collapse into one shared bucket. |
 | `SESSION_SECRET` | random | Secret used to sign the session cookie. **Must be set to a stable secret in production.** |
+| `SESSION_SAMESITE` | `none` | `SameSite` of the session cookie: `none`, `lax` or `strict`. Keep `none` when the IdP is on another site than this proxy (another registrable domain): the IdP's cross-site POST to `{SAML2_ROOT}/callback` then carries the session cookie. `lax` blocks that POST just like `strict`. `strict` works only with an IdP on the same site. With every value, `{SAML2_ROOT}/callback` accepts a response only with the `RelayState` of a sign-in that the same browser session started. Any other value stops the proxy at startup. |
 | `SESSION_MAX_STORE` | `500` | Maximum number of concurrent sessions held in memory. Prevents unbounded memory growth. |
 | `INVALID_LOGIN_REDIRECT` | — | URL to redirect to when a request arrives at `/wsfed` with no valid WS-Fed parameters. Returns `400` if unset. |
 | `NODE_ENV` | — | Set to `production` to enable production guards: fatal startup error if `WSFED_ISSUER` contains `localhost`, or if either SAML signature requirement has been disabled. |
@@ -58,7 +59,7 @@ All configuration is done via environment variables.
 | `{WSFED_ROOT}/FederationMetadata/2007-06/FederationMetadata.xml` | WS-Fed metadata document (used by Exchange for discovery) |
 | `{WSFED_ROOT}/adfs/fs/federationserverservice.asmx` | ADFS SOAP endpoint (returns signing cert thumbprint to Exchange) |
 | `{SAML2_ROOT}/login` | Initiates SAML2 authentication. `{WSFED_ROOT}?wa=wsignin1.0` sends the AuthnRequest itself and does not pass through this path, because browsers omit SameSite=Strict cookies on a second hop of a redirect chain that started on another site. |
-| `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding) |
+| `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding). A response must carry the `RelayState` that this proxy sent with the AuthnRequest of a sign-in in the same browser session; any other response is refused with `403`, so a response obtained by someone else cannot be injected into the session (login CSRF). Up to 5 sign-ins (for example browser tabs) can wait for the IdP at the same time, each with its own `wtrealm`. Only the redirect binding for the AuthnRequest is supported. |
 | `{SAML2_ROOT}/logout` | Initiates SAML2 logout. Reachable only via `{WSFED_ROOT}?wa=wsignout1.0`, which sets a single-use session flag; a direct or cross-origin request returns `403` so a third-party page cannot force a single logout. |
 
 ## Logging
