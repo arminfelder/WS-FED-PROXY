@@ -157,6 +157,23 @@ describe('token response form (WS-Federation 1.2 §13.6.2)', () => {
         expect(verifySignature(wresult)).toBe(true);
     });
 
+    // String.prototype.replace expands $&, $`, $' and $$ in a string replacement.
+    test.each([
+        ['$&', '$&amp;'],
+        ["$'", "$'"],
+        ['$`', '$`'],
+        ['$$', '$$'],
+        ['a$1b', 'a$1b'],
+    ])('wctx %p is returned literally, not as a replacement pattern', async (wctx, inContext) => {
+        const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM, wctx });
+        expect(res.status).toBe(200);
+        expect(hiddenInput(res.text, 'wctx')).toBe(wctx);
+        const wresult = hiddenInput(res.text, 'wresult');
+        expect(wresult.startsWith(`<t:RequestSecurityTokenResponse Context="${inContext}" xmlns:t=`)).toBe(true);
+        expect(wresult.match(/<t:RequestedSecurityToken>/g)).toHaveLength(1);
+        expect(verifySignature(wresult)).toBe(true);
+    });
+
     test('the auto-submit script carries the CSP nonce of the response', async () => {
         const res = await issue({ wa: 'wsignin1.0', wtrealm: REALM });
         expect(res.text).toMatch(/<script nonce="test-nonce">\s*document\.forms\[0\]\.submit\(\);/);
