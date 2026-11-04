@@ -88,6 +88,29 @@ describe('isWreplyAllowed', () => {
         expect(isWreplyAllowed('https://evil.corp/steal', 'https://exchange.corp/owa', allowedOrigins)).toBe(false);
     });
 
+    describe('wreply must stay within the wtrealm origin (WS-Federation 1.2 §13.2.2)', () => {
+        test('blocks a wreply on another allowlisted origin: the token names wtrealm as audience', () => {
+            expect(isWreplyAllowed('https://mail.example.com/cb', 'https://exchange.corp/owa', allowedOrigins)).toBe(false);
+        });
+
+        test('origin compare ignores case and path', () => {
+            expect(isWreplyAllowed('https://Exchange.CORP/auth/cb', 'https://exchange.corp/owa/', allowedOrigins)).toBe(true);
+        });
+
+        test('a wreply on a non-allowlisted origin stays blocked even when it matches wtrealm', () => {
+            expect(isWreplyAllowed('https://attacker.tld/cb', 'https://attacker.tld/owa', allowedOrigins)).toBe(false);
+        });
+
+        test('an invalid wtrealm fails closed', () => {
+            expect(isWreplyAllowed('https://exchange.corp/cb', 'not-a-url', allowedOrigins)).toBe(false);
+        });
+
+        test('sign-out cleanup passes no wtrealm and gets the allowlist check only', () => {
+            expect(isWreplyAllowed('https://mail.example.com/bye', undefined, allowedOrigins)).toBe(true);
+            expect(isWreplyAllowed('https://attacker.tld/bye', undefined, allowedOrigins)).toBe(false);
+        });
+    });
+
     describe('no same-origin fallback (empty allowedOrigins fails closed)', () => {
         test('blocks wreply sharing the wtrealm origin when nothing is allowlisted', () => {
             // both values come from the same caller, so matching them against
