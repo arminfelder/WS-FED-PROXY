@@ -28,7 +28,7 @@ All configuration is done via environment variables.
 |---|---|---|
 | `WSFED_ISSUER` | `https://localhost:3000/wsfed` | Full URI of this proxy's WS-Fed endpoint. Must match `AdfsIssuer` configured in Exchange. **Required in production.** Browsers must reach the proxy at this host: the SAML callback URL is derived from it, and the session cookie (`__Host-sid`: Secure, host-only, no `Domain`) is set for the host that served the request. |
 | `WSFED_CERT` | `exchange.crt` | Filename of the signing certificate (PEM), relative to `certs/` |
-| `WSFED_KEY` | `exchange.key` | Filename of the signing private key (PEM), relative to `certs/` |
+| `WSFED_KEY` | `exchange.key` | Filename of the signing private key (PEM), relative to `certs/`. The certificate, key and PKCS#7 files are read at startup; the proxy refuses to start when one of them is unreadable (for example a mode-600 key owned by another user). |
 | `WSFED_PKCS7` | `exchange.p7b` | Filename of the signing certificate in PKCS#7 format, relative to `certs/`. Used by the ADFS SOAP metadata endpoint. |
 | `WSFED_ROOT` | `/wsfed` | URL path prefix for WS-Fed endpoints |
 | `WSFED_TOKEN_LIFETIME` | `600` | Maximum lifetime in seconds of the issued WS-Fed token. This is the only credential that outlives the session (destroyed as soon as the token is issued), so it is deliberately short. The actual lifetime is the smallest of this value, the `wfresh` request parameter (minutes), and the time left until the IdP session ends (`SessionNotOnOrAfter` in the SAML assertion). If the IdP session has ended, or its end time cannot be read, no token is issued (`403`). Every sign-in goes to the IdP; the IdP decides whether to prompt again, except for `wfresh=0`, which sends `ForceAuthn`. |
