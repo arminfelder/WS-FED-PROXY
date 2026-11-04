@@ -234,6 +234,10 @@ app.use(function ecsAccessLog(req, res, next) {
     // which is a bearer credential until the token is issued.
     delete rec.http.request.headers;
     delete rec.http.response.headers;
+    // The GET callbacks carry signed SAML messages and one-time IDs in the query string.
+    rec.url.full = rec.url.full.split('?')[0];
+    delete rec.url.query;
+    delete rec.url.fragment;
     // ecs-helpers takes the ID from the X-Request-ID client header when req.id is not set.
     rec.http.request.id = req.requestId;
     process.stdout.write(JSON.stringify(rec) + '\n');
@@ -309,7 +313,8 @@ app.use(function(err, req, res, next) {
     message:      err.message,
     'http.request.id':           req.requestId,
     'http.request.method':       req.method,
-    'url.path':                  req.url,
+    // no query string: see the access log
+    'url.path':                  req.path,
     'http.response.status_code': status,
     'client.ip':                 req.ip,
     'user_agent.original':       req.get('user-agent'),
