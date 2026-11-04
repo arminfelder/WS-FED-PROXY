@@ -20,6 +20,7 @@ const createError = require('http-errors');
 const passport = require("passport");
 const { logError } = require("../util/logError");
 const { startSamlLogin } = require("../util/samlLogin");
+const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require("../util/sessionCookie");
 const router = express.Router();
 
 // wsignin1.0 no longer redirects here. Kept for links and bookmarks.
@@ -31,7 +32,7 @@ function endLogout(req, res) {
     const target = req.app.get("INVALID_LOGIN_REDIRECT");
     req.session.destroy(function (err) {
         if (err) { logError('session destroy failed', err, { 'http.request.id': req.requestId }); }
-        res.clearCookie("connect.sid");
+        res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
         if (target !== "") { return res.redirect(303, target); }
         res.status(200).type('text/plain').send('Signed out');
     });
@@ -63,7 +64,7 @@ router.get('/logout', function (req, res, next) {
             if (err) { return next(err); }
             req.session.destroy(function (err) {
                 if (err) { logError('session destroy failed', err, { 'http.request.id': req.requestId }); }
-                res.clearCookie("connect.sid");
+                res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
                 // redirect to the IdP with the SAML logout request
                 res.redirect(requestUrl);
             });
