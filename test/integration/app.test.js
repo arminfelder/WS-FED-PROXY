@@ -128,6 +128,14 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
             expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
         });
 
+        test('a LogoutRequest posted to the sign-in callback is refused and not answered', async () => {
+            const res = await request(app).post('/saml2/callback').type('form').set('Cookie', recordCookie())
+                .send({ SAMLRequest: signedLogoutRequest() });
+            expect(res.status).toBe(400);
+            expect(res.headers.location).toBeUndefined();
+            expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
+        });
+
         test('a redirect-binding LogoutRequest without Signature is refused', async () => {
             const res = await request(app).get('/saml2/logout/callback').query({ SAMLRequest: 'x' });
             expect(res.status).toBe(400);
