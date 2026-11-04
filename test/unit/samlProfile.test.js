@@ -64,6 +64,27 @@ describe('userFromProfile', () => {
         expect(() => userFromProfile(profile(overrides), settings)).toThrow(message);
     });
 
+    // node-saml checks idpIssuer on logout messages only, never on the sign-in assertion
+    describe('SAML2_IDP_ISSUER', () => {
+        const IDP = 'https://idp.example.com/realms/corp';
+
+        test('accepts the assertion when the issuer matches', () => {
+            expect(userFromProfile(profile({ issuer: IDP }), { ...settings, idpIssuer: IDP }).upn).toBe('alice@example.com');
+        });
+
+        test.each([
+            ['another issuer', { issuer: 'https://idp.example.com/realms/other' }],
+            ['no issuer', {}],
+        ])('refuses the assertion with %s', (_label, overrides) => {
+            expect(() => userFromProfile(profile(overrides), { ...settings, idpIssuer: IDP })).toThrow(ClaimError);
+            expect(() => userFromProfile(profile(overrides), { ...settings, idpIssuer: IDP })).toThrow(/issuer/);
+        });
+
+        test('does not check the issuer when the setting is not set', () => {
+            expect(userFromProfile(profile({ issuer: 'https://idp.example.com/realms/other' }), settings).upn).toBe('alice@example.com');
+        });
+    });
+
     test('reads the attribute names from the settings', () => {
         const p = profile({ attributes: [attribute('userPrincipalName', 'bob@example.com'), attribute('objectSid', SID_B64)] });
         const user = userFromProfile(p, { upnAttribute: 'userPrincipalName', sidAttribute: 'objectSid', sidBase64: true });

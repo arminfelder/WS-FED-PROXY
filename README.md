@@ -40,6 +40,7 @@ All configuration is done via environment variables.
 |---|---|---|
 | `SAML2_IDP` | `https://localhost:8443/auth/realms/master/protocol/saml` | Entry point URL of the SAML2 IdP |
 | `SAML2_IDP_PUB_KEY` | `idp.pem` | Filename of the IdP's public key/certificate (PEM), relative to `certs/` |
+| `SAML2_IDP_ISSUER` | — | Expected `<Issuer>` of the IdP's assertions and logout messages, for example `https://idp.example.com/realms/corp`. When set, an assertion or logout message with another issuer is refused. When empty, the issuer is not checked; the IdP certificate (`SAML2_IDP_PUB_KEY`) is then the only binding to the IdP. |
 | `SAML2_ISSUER` | `passport-js` | SAML2 `Issuer` sent in the `AuthnRequest` to the IdP |
 | `SAML2_IDENTIFIER_FORMAT` | `urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified` | NameID format requested from the IdP |
 | `SAML2_CLAIMS_UPN` | `upn` | Name of the SAML2 attribute holding the User Principal Name. **Required in every assertion**: Exchange claims-based authentication needs the UPN and primary SID claims ([Microsoft Learn](https://learn.microsoft.com/exchange/clients/outlook-on-the-web/ad-fs-claims-based-auth), step 4b). An assertion without it, with an empty value, or with more than one value (also across repeated `<Attribute>` elements) is refused (`/saml2/failure`, logged as `saml assertion rejected`). |

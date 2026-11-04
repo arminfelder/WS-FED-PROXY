@@ -82,12 +82,16 @@ function parseSid(raw, base64) {
  * NameID, UPN and SID are required. Exchange claims-based authentication
  * needs the UPN and primary SID claims in every token.
  *
- * @param {{upnAttribute: string, sidAttribute: string, sidBase64: boolean}} settings
+ * @param {{upnAttribute: string, sidAttribute: string, sidBase64: boolean, idpIssuer?: string}} settings
  * @throws {ClaimError}
  */
-function userFromProfile(profile, { upnAttribute, sidAttribute, sidBase64 }) {
+function userFromProfile(profile, { upnAttribute, sidAttribute, sidBase64, idpIssuer }) {
     const assertion = typeof profile.getAssertion === 'function' ? profile.getAssertion() : undefined;
     if (!assertion || !assertion.Assertion) throw new ClaimError('profile has no assertion');
+    // node-saml checks idpIssuer on logout messages only. The sign-in assertion is checked here.
+    if (idpIssuer !== undefined && profile.issuer !== idpIssuer) {
+        throw new ClaimError(`assertion issuer "${profile.issuer}" is not SAML2_IDP_ISSUER`);
+    }
     const user = {};
     if (typeof profile.nameID !== 'string' || profile.nameID === '') {
         throw new ClaimError('assertion has no usable NameID');

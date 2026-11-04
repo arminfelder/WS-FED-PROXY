@@ -105,7 +105,8 @@ const wsfedRouter = require('./routes/wsfed');
     }
     app.set("WSFED_SIGNOUT_CLEANUP", cleanup);
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
-    // expected <Issuer> of IdP responses; node-saml does not check it when empty
+    // expected <Issuer> of IdP messages; not checked when empty. node-saml applies it to
+    // logout messages only, util/samlProfile.js applies it to the sign-in assertion.
     app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");
     app.set("SAML2_ROOT", process.env.SAML2_ROOT || "/saml2");
     app.set("WSFED_ISSUER", process.env.WSFED_ISSUER || "https://localhost:3000/wsfed");
@@ -317,6 +318,7 @@ function samlVerify(profile, done) {
                 upnAttribute: app.get("SAML2_CLAIMS_UPN"),
                 sidAttribute: app.get("SAML2_CLAIMS_SID"),
                 sidBase64:    app.get("SAML2_CLAIMS_SID_BASE64"),
+                idpIssuer:    app.get("SAML2_IDP_ISSUER") || undefined,
             });
         } catch (err) {
             // refused assertion, not a server error: /saml2/callback logs the message
