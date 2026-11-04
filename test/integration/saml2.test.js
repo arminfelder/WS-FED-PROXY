@@ -354,8 +354,8 @@ describe('POST /saml2/logout/callback — which local session an IdP LogoutReque
     test('the signed-in user wins over an old record of another user', async () => {
         const app = buildApp({ authenticated: true, user: SAML_USER });
         const res = await send(app, record({ nameID: 'old@corp', sessionIndex: 'idx-9' }));
-        expect(res.status).toBe(200);
-        expect(res.text).toContain('wsignoutcleanup1.0');
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('wa=wsignoutcleanup1.0');
         expect(clearsRecord(res)).toBe(true);
     });
 
@@ -370,7 +370,8 @@ describe('POST /saml2/logout/callback — which local session an IdP LogoutReque
     test('a LogoutRequest without SessionIndex ends every session of the user', async () => {
         mockIdpLogout.profile = { nameID: 'u@corp' };
         const res = await send(buildApp(), record({ nameID: 'u@corp', sessionIndex: 'idx-1' }));
-        expect(res.status).toBe(200);
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('wa=wsignoutcleanup1.0');
         expect(clearsRecord(res)).toBe(true);
     });
 });
@@ -384,12 +385,18 @@ describe('SAML2_SLO=false', () => {
         const cookie = `${ssoRecord.COOKIE_NAME}=${ssoRecord.seal(
             ssoRecord.addRealm(null, SAML_USER, 'https://exchange.corp/owa/', 3600), 'test-secret')}`;
         const res = await request(app).get('/wsfed').set('Cookie', cookie).query({ wa: 'wsignout1.0' });
-        expect(res.status).toBe(200);
-        expect(res.text).toContain('src="https://exchange.corp/owa/?wa=wsignoutcleanup1.0"');
-        expect(res.text).toContain('data-next="/saml2/logout"');
-        expect(String(res.headers['set-cookie'])).toMatch(new RegExp(`${ssoRecord.COOKIE_NAME}=;`));
-        expect(put).not.toHaveBeenCalled();
+        const kinds = put.mock.calls.map((c) => c[0].kind);
         put.mockRestore();
+        expect(res.status).toBe(302);
+        const cleanup = new URL(res.headers.location);
+        expect(cleanup.origin + cleanup.pathname).toBe('https://exchange.corp/owa/');
+        expect(String(res.headers['set-cookie'])).toMatch(new RegExp(`${ssoRecord.COOKIE_NAME}=;`));
+        // the only store entry is the cleanup continuation, not a sign-out state for the IdP
+        expect(kinds).toEqual(['cleanup']);
+        const back = new URL(cleanup.searchParams.get('wreply'));
+        const end = await request(app).get(back.pathname + back.search);
+        expect(end.headers.location).toBe('/saml2/logout');
+        expect(passport._strategy().logout).not.toHaveBeenCalled();
     });
 
     test('with wreply, ends at the checked wreply', async () => {
@@ -414,10 +421,11 @@ describe('sign-out without a SAML identity', () => {
         const { pendingLogout } = require('../../util/pendingLogout');
         const put = jest.spyOn(pendingLogout, 'put');
         const res = await request(buildApp()).get('/wsfed').query({ wa: 'wsignout1.0' });
+        const calls = put.mock.calls.length;
+        put.mockRestore();
         expect(res.status).toBe(302);
         expect(res.headers.location).toBe('/saml2/logout');
-        expect(put).not.toHaveBeenCalled();
-        put.mockRestore();
+        expect(calls).toBe(0);
     });
 });
 

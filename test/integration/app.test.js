@@ -87,9 +87,15 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
         test('cleans up the RPs, clears the record, then answers the IdP with a LogoutResponse', async () => {
             const res = await request(app).post('/saml2/logout/callback').type('form').set('Cookie', recordCookie())
                 .send({ SAMLRequest: signedLogoutRequest(), RelayState: 'kc-relay' });
-            expect(res.status).toBe(200);
-            expect(res.text).toContain('src="https://exchange.corp/owa/?wa=wsignoutcleanup1.0"');
-            const next = /data-next="([^"]+)"/.exec(res.text)[1].replace(/&amp;/g, '&');
+            expect(res.status).toBe(302);
+            const cleanup = new URL(res.headers.location);
+            expect(cleanup.origin + cleanup.pathname).toBe('https://exchange.corp/owa/');
+            expect(cleanup.searchParams.get('wa')).toBe('wsignoutcleanup1.0');
+            // the RP goes back to wreply; the proxy then sends the LogoutResponse to the IdP
+            const back = new URL(cleanup.searchParams.get('wreply'));
+            const done = await request(app).get(back.pathname + back.search);
+            expect(done.status).toBe(302);
+            const next = done.headers.location;
             expect(next.startsWith('https://idp.example.com/saml?SAMLResponse=')).toBe(true);
             expect(new URL(next).searchParams.get('RelayState')).toBe('kc-relay');
             expect(String(res.headers['set-cookie'])).toMatch(/__Host-wsfed_sso=;/);

@@ -97,6 +97,13 @@ const wsfedRouter = require('./routes/wsfed');
         process.exit(1);
     }
     app.set("SAML2_SLO", slo === "true");
+    // redirect: a top-level navigation to each RP (util/signoutPage.js). image: one page with images.
+    const cleanup = (process.env.WSFED_SIGNOUT_CLEANUP || "redirect").trim().toLowerCase();
+    if (cleanup !== "redirect" && cleanup !== "image") {
+        console.error('FATAL: WSFED_SIGNOUT_CLEANUP must be "redirect" or "image"');
+        process.exit(1);
+    }
+    app.set("WSFED_SIGNOUT_CLEANUP", cleanup);
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
     // expected <Issuer> of IdP responses; node-saml does not check it when empty
     app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");

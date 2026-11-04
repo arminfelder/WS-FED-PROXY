@@ -156,7 +156,7 @@ async function handleIdpLogoutRequest(req, res, next) {
         }
         clearSessionCookie(res);
         clearSsoCookie(res);
-        sendCleanupThenContinue(req, res, record, responseUrl);
+        sendCleanupThenContinue(req, res, record, responseUrl).catch(next);
     });
 }
 

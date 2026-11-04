@@ -421,8 +421,41 @@ describe('GET /wsfed — realm tracking and sign-out cleanup (WS-Federation 1.2 
         expect(record.realms).toEqual(['https://exchange.corp/owa/', 'https://exchange.corp/ecp/']);
     });
 
-    test('wsignout1.0 loads wsignoutcleanup1.0 for each allowlisted realm, then continues to the IdP step', async () => {
+    test('wsignout1.0 redirects through wsignoutcleanup1.0 of each allowlisted realm, then to the IdP step', async () => {
         const app = buildApp();
+        const res = await request(app).get('/wsfed')
+            .set('Cookie', sealed(['https://exchange.corp/owa/', 'https://removed.tld/app', 'https://exchange.corp/ecp/']))
+            .query({ wa: 'wsignout1.0' });
+        // top-level navigation: the RP cookies go with it also when the RP is on another site
+        expect(res.status).toBe(302);
+        expect(res.headers['cache-control']).toBe('no-store');
+        const first = new URL(res.headers.location);
+        expect(first.origin + first.pathname).toBe('https://exchange.corp/owa/');
+        expect(first.searchParams.get('wa')).toBe('wsignoutcleanup1.0');
+        const back1 = new URL(first.searchParams.get('wreply'));
+        expect(back1.origin + back1.pathname).toBe('https://proxy.example.com/wsfed/signout/continue');
+
+        // the RP sends the browser back to wreply: next realm; removed.tld is not allowlisted any more
+        const hop = await request(app).get(back1.pathname + back1.search);
+        expect(hop.status).toBe(302);
+        const second = new URL(hop.headers.location);
+        expect(second.origin + second.pathname).toBe('https://exchange.corp/ecp/');
+        const back2 = new URL(second.searchParams.get('wreply'));
+        expect(back2.searchParams.get('c')).not.toBe(back1.searchParams.get('c'));
+
+        const last = await request(app).get(back2.pathname + back2.search);
+        expect(last.status).toBe(302);
+        expect(last.headers.location).toMatch(/^\/saml2\/logout\?state=[0-9a-f]{32}$/);
+
+        // each continuation ID works one time only
+        const again = await request(app).get(back1.pathname + back1.search);
+        expect(again.status).toBe(400);
+        // kept until /saml2/logout uses the state, so a failed sign-out can be done again
+        expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
+    });
+
+    test('WSFED_SIGNOUT_CLEANUP=image: one page loads wsignoutcleanup1.0 of each allowlisted realm, then continues to the IdP step', async () => {
+        const app = buildApp({ WSFED_SIGNOUT_CLEANUP: 'image' });
         const res = await request(app).get('/wsfed')
             .set('Cookie', sealed(['https://exchange.corp/owa/', 'https://removed.tld/app']))
             .set('Referer', 'https://exchange.corp/owa/').query({ wa: 'wsignout1.0' });

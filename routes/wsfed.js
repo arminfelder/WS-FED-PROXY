@@ -28,7 +28,7 @@ const {startSamlLogin} = require("../util/samlLogin");
 const ssoRecord = require("../util/ssoRecord");
 const {pendingLogout} = require("../util/pendingLogout");
 const {clearSessionCookie, clearSsoCookie, SSO_COOKIE_OPTIONS} = require("../util/cookies");
-const {sendCleanupThenContinue} = require("../util/signoutPage");
+const {sendCleanupThenContinue, continueCleanup} = require("../util/signoutPage");
 const router = express.Router();
 
 const certsDir = path.join(__dirname, '../certs');
@@ -137,7 +137,7 @@ async function signOut(req, res, next, query) {
         if (!toIdp) {
             clearSsoCookie(res);
         }
-        sendCleanupThenContinue(req, res, record, continueUrl);
+        sendCleanupThenContinue(req, res, record, continueUrl).catch(next);
     });
 }
 
@@ -303,6 +303,11 @@ const federationMetadata = metadataHandler((req) => {
     };
 });
 router.get('/FederationMetadata/2007-06/FederationMetadata.xml', federationMetadata);
+
+// The RPs send the browser back here after wsignoutcleanup1.0 (util/signoutPage.js).
+router.get('/signout/continue', (req, res, next) => {
+    continueCleanup(req, res).catch(next);
+});
 router.federationMetadata = federationMetadata;
 
 // The wsfed library builds URLs from the Host and X-Forwarded-* headers.
