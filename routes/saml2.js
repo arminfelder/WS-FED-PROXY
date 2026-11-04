@@ -19,15 +19,11 @@ const express = require('express');
 const createError = require('http-errors');
 const passport = require("passport");
 const { logError } = require("../util/logError");
+const { startSamlLogin } = require("../util/samlLogin");
 const router = express.Router();
 
-router.get('/login',function(req, res, next) {
-    const args = req.session.wsfed_args;
-    // ForceAuthn makes the IdP prompt again (WS-Federation 1.2 §13.2.2, wfresh)
-    const strategy = args && (args.wfresh === "0" || args.reauthRequested) ? "saml-force" : "saml";
-    passport.authenticate(strategy,{
-        failureRedirect: req.app.get("SAML2_ROOT") + "/failure"
-})(req, res, next)});
+// wsignin1.0 no longer redirects here. Kept for links and bookmarks.
+router.get('/login', startSamlLogin);
 
 // Where to land once the local session is gone. WSFED_ROOT is not usable here:
 // it has no wa/wtrealm and would answer 400.

@@ -57,7 +57,7 @@ All configuration is done via environment variables.
 | `{WSFED_ROOT}` | WS-Fed passive sign-in / sign-out entry point |
 | `{WSFED_ROOT}/FederationMetadata/2007-06/FederationMetadata.xml` | WS-Fed metadata document (used by Exchange for discovery) |
 | `{WSFED_ROOT}/adfs/fs/federationserverservice.asmx` | ADFS SOAP endpoint (returns signing cert thumbprint to Exchange) |
-| `{SAML2_ROOT}/login` | Initiates SAML2 authentication |
+| `{SAML2_ROOT}/login` | Initiates SAML2 authentication. `{WSFED_ROOT}?wa=wsignin1.0` sends the AuthnRequest itself and does not pass through this path, because browsers omit SameSite=Strict cookies on a second hop of a redirect chain that started on another site. |
 | `{SAML2_ROOT}/callback` | SAML2 assertion consumer (POST binding) |
 | `{SAML2_ROOT}/logout` | Initiates SAML2 logout. Reachable only via `{WSFED_ROOT}?wa=wsignout1.0`, which sets a single-use session flag; a direct or cross-origin request returns `403` so a third-party page cannot force a single logout. |
 
