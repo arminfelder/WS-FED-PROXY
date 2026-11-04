@@ -18,6 +18,20 @@ deploy
 Dockerfile
 *.md
 
+# Documentation sources, build output and CI files: nothing in them runs in the container.
+docs
+dist
+.gitlab-ci.yml
+sonar-project.properties
+*.tex
+*.pdf
+*.aux
+*.fls
+*.log
+*.out
+*.toc
+*.fdb_latexmk
+
 # Keys, certs and captures that live in the working tree during development.
 # certs/ is mounted at runtime; nothing here belongs in a layer.
 *.key
