@@ -118,6 +118,55 @@ describe('SAML verify callback', () => {
     });
 });
 
+describe('access log', () => {
+    const capture = () => {
+        const lines = [];
+        jest.spyOn(process.stdout, 'write').mockImplementation((chunk) => { lines.push(String(chunk)); return true; });
+        return () => lines
+            .filter((l) => l.startsWith('{'))
+            .map((l) => JSON.parse(l))
+            .filter((r) => r.message === 'access_log');
+    };
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+        delete process.env.TRUST_PROXY;
+    });
+
+    test('request and response headers are not logged: Cookie and Set-Cookie carry the session ID', async () => {
+        // the Secure session cookie is only set on a request Express sees as HTTPS
+        process.env.TRUST_PROXY = '1';
+        let proxied;
+        jest.isolateModules(() => { proxied = require('./helpers/buildFullApp')(); });
+        const accessLines = capture();
+        const res = await request(proxied)
+            .get('/wsfed')
+            .set('X-Forwarded-Proto', 'https')
+            .query({ wa: 'wsignin1.0', wtrealm: 'https://exchange.corp' })
+            .set('Cookie', '__Host-sid=s%3Asecret-session-id');
+        const issued = String(res.headers['set-cookie']).split(';')[0].split('=')[1];
+        expect(issued).toBeTruthy();
+        const access = accessLines();
+        expect(access).toHaveLength(1);
+        expect(access[0].http.request.headers).toBeUndefined();
+        expect(access[0].http.response.headers).toBeUndefined();
+        expect(JSON.stringify(access)).not.toContain('secret-session-id');
+        expect(JSON.stringify(access)).not.toContain(issued);
+        expect(JSON.stringify(access)).not.toMatch(/set-cookie/i);
+        // the fields the headers fed stay
+        expect(access[0].http.request.method).toBe('GET');
+        expect(access[0].http.response.status_code).toBe(302);
+    });
+
+    test('http.request.id is the server UUID, not a client X-Request-ID', async () => {
+        const accessLines = capture();
+        await request(app).get('/nope').set('X-Request-ID', 'forged-id');
+        const [rec] = accessLines();
+        expect(rec.http.request.id).toBe(rec['http.request.id']);
+        expect(JSON.stringify(rec)).not.toContain('forged-id');
+    });
+});
+
 describe('SAML request-ID cache', () => {
     test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
         const passport = require('passport');
