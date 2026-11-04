@@ -262,7 +262,8 @@ router.get('/', (req, res, next) => {
             // (WS-Federation 1.2 §13.6.2), so Context is written again from it.
             // Context is outside the signed assertion, so the signature stays valid.
             const context = args.wctx === undefined ? '' : `Context="${escapeAttribute(args.wctx)}" `;
-            wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, `<t:RequestSecurityTokenResponse ${context}`);
+            // A function, not a string: a string replacement expands $&, $` and $' in wctx.
+            wresult = wresult.replace(/^<t:RequestSecurityTokenResponse Context="[^"]*" /, () => `<t:RequestSecurityTokenResponse ${context}`);
             // The page holds a bearer token. A cached or bfcache copy would re-post it.
             res.set('Cache-Control', 'no-store');
             res.render('wsfed-form', {callback: postUrl, wresult, wctx: args.wctx});
