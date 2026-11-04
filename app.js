@@ -175,6 +175,8 @@ app.use(function ecsAccessLog(req, res, next) {
     // which is a bearer credential until the token is issued.
     delete rec.http.request.headers;
     delete rec.http.response.headers;
+    // ecs-helpers takes the ID from the X-Request-ID client header when req.id is not set.
+    rec.http.request.id = req.requestId;
     process.stdout.write(JSON.stringify(rec) + '\n');
   });
   next();
