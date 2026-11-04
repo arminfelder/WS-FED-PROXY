@@ -32,26 +32,56 @@ function relayStateMatches(received, expected) {
     return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// One entry for each sign-in that waits for the IdP, for example one for each browser tab.
+// Each entry keeps its own wsfed_args, so that each tab gets the token for its own realm.
+const MAX_PENDING_SIGNINS = 5;
+
+function rememberSignIn(session, relayState) {
+    const pending = session.saml_pending && typeof session.saml_pending === 'object' ? session.saml_pending : {};
+    // null, not undefined: the session store does not keep undefined values
+    pending[relayState] = session.wsfed_args === undefined ? null : session.wsfed_args;
+    const keys = Object.keys(pending);
+    for (let i = 0; i < keys.length - MAX_PENDING_SIGNINS; i++) {
+        delete pending[keys[i]];
+    }
+    session.saml_pending = pending;
+}
+
+/**
+ * Removes and returns the pending sign-in that sent this RelayState.
+ * @returns {{found: boolean, args?: object|null}}
+ */
+function takeSignIn(session, relayState) {
+    const pending = session && session.saml_pending;
+    if (!pending || typeof pending !== 'object') return {found: false};
+    const key = Object.keys(pending).find((k) => relayStateMatches(relayState, k));
+    if (key === undefined) return {found: false};
+    const args = pending[key];
+    delete pending[key];
+    return {found: true, args};
+}
+
 /**
  * Sends the browser to the IdP with an AuthnRequest.
  *
  * Call it in the same response that stores wsfed_args. The sign-in arrives
- * through a redirect from the RP, which is often another site. Browsers then
- * treat every later hop of that navigation as cross-site and omit the
- * SameSite=Strict session cookie, so a second hop on this proxy cannot read the
- * session. The IdP's POST to /callback starts a new navigation. That POST
- * carries the cookie only if the IdP is on the same site as this proxy.
+ * through a redirect from the RP, which is often another site. With
+ * SESSION_SAMESITE=strict, browsers then omit the session cookie on every later
+ * hop of that navigation, so a second hop on this proxy cannot read the session.
+ *
+ * The RelayState goes only in the redirect binding: passport-saml does not give
+ * options.additionalParams to the HTTP-POST binding (strategy.js getAuthorizeFormAsync).
  */
 function startSamlLogin(req, res, next) {
     const args = req.session.wsfed_args;
     // ForceAuthn makes the IdP prompt again (WS-Federation 1.2 §13.2.2, wfresh)
     const strategy = args && (args.wfresh === "0" || args.reauthRequested) ? "saml-force" : "saml";
     const relayState = newRelayState();
-    req.session.saml_relay = relayState;
+    rememberSignIn(req.session, relayState);
     return passport.authenticate(strategy, {
         failureRedirect: req.app.get("SAML2_ROOT") + "/failure",
         additionalParams: { RelayState: relayState },
     })(req, res, next);
 }
 
-module.exports = { startSamlLogin, relayStateMatches };
+module.exports = { startSamlLogin, takeSignIn, MAX_PENDING_SIGNINS };

@@ -61,7 +61,7 @@ describe('session cookie', () => {
         delete process.env.TRUST_PROXY;
     });
 
-    test('is __Host- prefixed: Secure, Path=/, no Domain, HttpOnly, SameSite=Strict', async () => {
+    test('is __Host- prefixed: Secure, Path=/, no Domain, HttpOnly, SameSite=None by default (SESSION_SAMESITE)', async () => {
         // secure cookies are only set on a request Express sees as HTTPS
         process.env.TRUST_PROXY = '1';
         let proxied;
@@ -76,7 +76,7 @@ describe('session cookie', () => {
         expect(cookie).toMatch(/; Path=\//);
         expect(cookie).toMatch(/; HttpOnly/);
         expect(cookie).toMatch(/; Secure/);
-        expect(cookie).toMatch(/; SameSite=Strict/);
+        expect(cookie).toMatch(/; SameSite=None/);
         expect(cookie).not.toMatch(/Domain=/i);
     });
 
@@ -88,7 +88,7 @@ describe('session cookie', () => {
         // without Secure the browser drops a __Host- cookie, the expiry one included
         expect(cookie).toMatch(/; Secure/);
         expect(cookie).toMatch(/; HttpOnly/);
-        expect(cookie).toMatch(/; SameSite=Strict/);
+        expect(cookie).toMatch(/; SameSite=None/);
     });
 });
 
