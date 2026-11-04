@@ -17,6 +17,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const { formatError } = require("@elastic/ecs-helpers");
 
+function record(level, msg, fields) {
+    return {
+        '@timestamp': new Date().toISOString(),
+        'log.level': level,
+        message: msg,
+        'ecs.version': '1.6.0',
+        ...fields,
+    };
+}
+
 /**
  * Writes an ECS-formatted error record to stdout. Server-side only — `err`
  * must never be surfaced to the client.
@@ -26,15 +36,19 @@ const { formatError } = require("@elastic/ecs-helpers");
  * @param {object} [fields] - extra ECS fields, e.g. { 'http.request.id': req.requestId }
  */
 function logError(msg, err, fields = {}) {
-    const rec = {
-        '@timestamp': new Date().toISOString(),
-        'log.level': 'error',
-        message: msg,
-        'ecs.version': '1.6.0',
-        ...fields,
-    };
+    const rec = record('error', msg, fields);
     formatError(rec, err);
     process.stdout.write(JSON.stringify(rec) + '\n');
 }
 
-module.exports = { logError };
+/**
+ * Writes an ECS-formatted warn record to stdout, for a condition that does not stop the proxy.
+ *
+ * @param {string} msg - short, stable event description
+ * @param {object} [fields] - extra ECS fields
+ */
+function logWarn(msg, fields = {}) {
+    process.stdout.write(JSON.stringify(record('warn', msg, fields)) + '\n');
+}
+
+module.exports = { logError, logWarn };
