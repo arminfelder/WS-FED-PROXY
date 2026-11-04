@@ -4,7 +4,7 @@ services:
   proxy:
     build: .
     environment:
-      FAILED_LOGIN_REDIRECT: https://localhost
+      INVALID_LOGIN_REDIRECT: https://localhost
       HTTPS: false
       SAML2_CLAIMS_SID_BASE64: false
       SAML2_CLAIMS_UPN: upn
@@ -43,7 +43,8 @@ services:
     image: quay.io/keycloak/keycloak:16.1.0
     environment:
       KEYCLOAK_USER: "admin"
-      KEYCLOAK_PASSWORD: "1234"
+      # no default: set KC_ADMIN_PW in the shell or in a git-ignored .env file
+      KEYCLOAK_PASSWORD: "${KC_ADMIN_PW:?set KC_ADMIN_PW in the environment or in .env}"
       DEBUG: "true"
       DEBUG_PORT: "*:8787"
     command:
