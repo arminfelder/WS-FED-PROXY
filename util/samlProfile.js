@@ -15,7 +15,7 @@ GNU General Public License for more details.
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-const sidConverter = require('security-identifier');
+const { sidBufferToString } = require('./sid');
 
 // Text form of a Windows SID (MS-DTYP §2.4.2.1). The identifier authority is
 // decimal below 2^32 and 12 hex digits above; 1 to 15 sub-authorities.
@@ -62,13 +62,11 @@ function requiredAttribute(assertion, name, claim) {
 function parseSid(raw, base64) {
     let sid = raw;
     if (base64) {
-        const buf = Buffer.from(raw, 'base64');
-        // revision, sub-authority count, 6-byte authority, 4 bytes per sub-authority.
-        // security-identifier reads past the end of a shorter buffer.
-        if (buf.length < 8 || buf.length !== 8 + 4 * buf[1]) {
-            throw new ClaimError('SID attribute is not a binary SID');
+        try {
+            sid = sidBufferToString(Buffer.from(raw, 'base64'));
+        } catch (err) {
+            throw new ClaimError(`SID attribute is not a binary SID: ${err.message}`);
         }
-        sid = sidConverter.sidBufferToString(buf);
     }
     if (!isWellFormedSid(sid)) {
         throw new ClaimError('SID attribute is not a well-formed SID');

@@ -262,7 +262,8 @@ describe('SAML verify callback', () => {
     });
 
     test('accepts a complete assertion', async () => {
-        const sid = require('security-identifier').sidStringToBuffer('S-1-5-21-1-2-3-500').toString('base64');
+        // S-1-5-21-1-2-3-500 in the MS-DTYP 2.4.2.2 binary form
+        const sid = Buffer.from([1, 5, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 244, 1, 0, 0]).toString('base64');
         const { err, user } = await verify(withAttributes({ upn: 'alice@example.com', sid }));
         expect(err).toBeNull();
         expect(user).toMatchObject({ id: 'alice', upn: 'alice@example.com', sid: 'S-1-5-21-1-2-3-500' });

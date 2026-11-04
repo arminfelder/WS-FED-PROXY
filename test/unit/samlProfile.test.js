@@ -1,8 +1,18 @@
-const sidConverter = require('security-identifier');
 const { userFromProfile, parseSid, ClaimError } = require('../../util/samlProfile');
 
+// MS-DTYP 2.4.2.2 encoder, for the fixtures only
+function sidStringToBuffer(sid) {
+    const [, , authority, ...subs] = sid.split('-');
+    const buf = Buffer.alloc(8 + 4 * subs.length);
+    buf[0] = 1;
+    buf[1] = subs.length;
+    buf.writeUIntBE(Number(authority), 2, 6);
+    subs.forEach((s, i) => buf.writeUInt32LE(Number(s), 8 + 4 * i));
+    return buf;
+}
+
 const SID = 'S-1-5-21-1004336348-1177238915-682003330-512';
-const SID_B64 = sidConverter.sidStringToBuffer(SID).toString('base64');
+const SID_B64 = sidStringToBuffer(SID).toString('base64');
 const settings = { upnAttribute: 'upn', sidAttribute: 'sid', sidBase64: true };
 
 const AUTHN = [{ $: { AuthnInstant: '2026-10-09T10:00:00Z', SessionNotOnOrAfter: '2026-10-09T18:00:00Z' } }];
@@ -112,9 +122,10 @@ describe('parseSid', () => {
 
     test.each([
         ['too short for a header', Buffer.from([1, 1, 0]).toString('base64')],
-        ['a sub-authority count beyond the buffer (security-identifier would throw RangeError)', Buffer.from([1, 5, 0, 0, 0, 0, 0, 5, 1, 0, 0, 0]).toString('base64')],
+        ['a sub-authority count beyond the buffer', Buffer.from([1, 5, 0, 0, 0, 0, 0, 5, 1, 0, 0, 0]).toString('base64')],
         ['no sub-authority', Buffer.from([1, 0, 0, 0, 0, 0, 0, 5]).toString('base64')],
-        ['trailing bytes', Buffer.concat([sidConverter.sidStringToBuffer(SID), Buffer.from([0])]).toString('base64')],
+        ['revision 2', Buffer.from([2, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0]).toString('base64')],
+        ['trailing bytes', Buffer.concat([sidStringToBuffer(SID), Buffer.from([0])]).toString('base64')],
         ['not base64 at all', '!!!'],
         ['an empty value', ''],
     ])('refuses a binary SID that is %s', (_label, value) => {
