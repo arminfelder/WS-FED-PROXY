@@ -108,6 +108,16 @@ const wsfedRouter = require('./routes/wsfed');
     }
     app.set("WSFED_SIGNOUT_CLEANUP", cleanup);
     app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
+    // Optional SP signing pair: with it, the AuthnRequest and the logout messages are signed,
+    // and the IdP can require that. Both or neither.
+    const spKey = process.env.SAML2_SP_KEY || "";
+    const spCert = process.env.SAML2_SP_CERT || "";
+    if ((spKey === "") !== (spCert === "")) {
+        console.error('FATAL: SAML2_SP_KEY and SAML2_SP_CERT must be set together (file names in certs/).');
+        process.exit(1);
+    }
+    app.set("SAML2_SP_KEY", spKey);
+    app.set("SAML2_SP_CERT", spCert);
     // expected <Issuer> of IdP messages; not checked when empty. node-saml applies it to
     // logout messages only, util/samlProfile.js applies it to the sign-in assertion.
     app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");
@@ -355,6 +365,13 @@ const samlOptions = {
 };
 if (app.get("SAML2_IDP_ISSUER") !== "") {
     samlOptions.idpIssuer = app.get("SAML2_IDP_ISSUER");
+}
+if (app.get("SAML2_SP_KEY") !== "") {
+    samlOptions.privateKey = fs.readFileSync(path.join(__dirname, "./certs", app.get("SAML2_SP_KEY")), { encoding: 'utf8' });
+    samlOptions.publicCert = fs.readFileSync(path.join(__dirname, "./certs", app.get("SAML2_SP_CERT")), { encoding: 'utf8' });
+    // node-saml signs with SHA-1 unless told otherwise
+    samlOptions.signatureAlgorithm = 'sha256';
+    samlOptions.digestAlgorithm = 'sha256';
 }
 
 function samlVerify(profile, done) {
