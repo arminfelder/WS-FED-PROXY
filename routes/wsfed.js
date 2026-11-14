@@ -18,8 +18,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 const express = require('express');
 const createError = require('http-errors');
 const wsfed = require("wsfed");
-const fs = require("fs");
-const path = require("path");
 const profileMapper = require("../util/OWAProfileMapper");
 const {isRealmAllowed, isWreplyAllowed, allowedWreplyUrl} = require("../util/validateRedirect");
 const {logError} = require("../util/logError");
@@ -31,18 +29,10 @@ const {clearSessionCookie, clearSsoCookie, SSO_COOKIE_OPTIONS} = require("../uti
 const {sendCleanupThenContinue, continueCleanup} = require("../util/signoutPage");
 const router = express.Router();
 
-const certsDir = path.join(__dirname, '../certs');
-let _cert, _key, _pkcs7;
-
-function getCerts(app) {
-    if (!_cert) {
-        _cert = fs.readFileSync(path.join(certsDir, app.get("WSFED_CERT")));
-        _key = fs.readFileSync(path.join(certsDir, app.get("WSFED_KEY")));
-        _pkcs7 = fs.readFileSync(path.join(certsDir, app.get("WSFED_PKCS7")));
-    }
-    return {cert: _cert, key: _key, pkcs7: _pkcs7};
+// {cert, key, pkcs7}, read by app.js at startup (util/signingFiles.js)
+function signingFiles(req) {
+    return req.app.get("WSFED_SIGNING");
 }
-
 
 const WSFED_PARAMS = ['wa', 'wtrealm', 'wreply', 'wctx', 'wfresh'];
 // one year, in minutes
@@ -245,7 +235,7 @@ router.get('/', (req, res, next) => {
             return next(createError(400, `unsupported wa: ${query.wa}`));
     }
 }, (req, res, next) => {
-    const {cert, key} = getCerts(req.app);
+    const {cert, key} = signingFiles(req);
     const args = res.locals.wsfedArgs;
     return wsfed.auth({
         issuer: req.app.get("WSFED_ISSUER"),
@@ -294,7 +284,7 @@ router.get('/', (req, res, next) => {
 
 // WS-Federation 1.2 §3.2.2. app.js also mounts this at the server root.
 const federationMetadata = metadataHandler((req) => {
-    const {cert, key} = getCerts(req.app);
+    const {cert, key} = signingFiles(req);
     return {
         issuer: req.app.get("WSFED_ISSUER"),
         endpoint: new URL(req.app.get("WSFED_ISSUER")).origin + req.app.get("WSFED_ROOT"),
@@ -328,7 +318,7 @@ router.get('/adfs/fs/federationserverservice.asmx', (req, res) => {
 
 router.post('/adfs/fs/federationserverservice.asmx',
     (req, res, next) => {
-        const {cert, pkcs7} = getCerts(req.app);
+        const {cert, pkcs7} = signingFiles(req);
         return wsfed.federationServerService.thumbprint({pkcs7, cert})(configuredHostRequest(req), res)
     });
 

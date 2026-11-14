@@ -37,6 +37,7 @@ const { parseTrustProxy } = require('./util/parseTrustProxy');
 const { parseIntEnv } = require('./util/parseIntEnv');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require('./util/sessionCookie');
 const { userFromProfile, ClaimError } = require('./util/samlProfile');
+const { readSigningFiles } = require('./util/signingFiles');
 // not exported from the package index
 const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
@@ -150,6 +151,19 @@ const wsfedRouter = require('./routes/wsfed');
     // empty matches nothing — refuse to start rather than 403 every sign-in
     if (app.get("WSFED_ALLOWED_REALMS").length === 0) {
         console.error('FATAL: WSFED_ALLOWED_REALMS is empty. Set it to a comma-separated list of the realm URLs allowed to receive tokens, e.g. "https://exchange.corp".');
+        process.exit(1);
+    }
+
+    // The token signing key is read here, not at the first sign-in: an unreadable
+    // file is a deployment error and must stop the start.
+    try {
+        app.set("WSFED_SIGNING", readSigningFiles(path.join(__dirname, 'certs'), {
+            cert:  app.get("WSFED_CERT"),
+            key:   app.get("WSFED_KEY"),
+            pkcs7: app.get("WSFED_PKCS7"),
+        }));
+    } catch (err) {
+        console.error(`FATAL: cannot read a WS-Fed signing file in certs/: ${err.message}`);
         process.exit(1);
     }
 

@@ -13,14 +13,12 @@ const passport = require('passport');
 const { hppPrevent } = require('hpp-prevent');
 const { parseAllowedRealms } = require('../../../util/validateRedirect');
 const { SESSION_COOKIE_NAME } = require('../../../util/sessionCookie');
+const { readSigningFiles } = require('../../../util/signingFiles');
 /**
  * @param {object} opts
  * @param {string}   [opts.SAML2_ROOT='/saml2']
  * @param {string}   [opts.WSFED_ROOT='/wsfed']
  * @param {string}   [opts.WSFED_ISSUER='https://proxy.example.com/wsfed']
- * @param {string}   [opts.WSFED_CERT='exchange.crt']
- * @param {string}   [opts.WSFED_KEY='exchange.key']
- * @param {string}   [opts.WSFED_PKCS7='exchange.p7b']
  * @param {string}   [opts.INVALID_LOGIN_REDIRECT='']
  * @param {string}   [opts.WSFED_ALLOWED_REALMS='https://exchange.corp']  comma-separated;
  *                   defaults populated because an empty list rejects everything
@@ -38,9 +36,10 @@ function buildApp(opts = {}) {
     app.set('SAML2_ROOT', opts.SAML2_ROOT || '/saml2');
     app.set('WSFED_ROOT', opts.WSFED_ROOT || '/wsfed');
     app.set('WSFED_ISSUER', opts.WSFED_ISSUER || 'https://proxy.example.com/wsfed');
-    app.set('WSFED_CERT', opts.WSFED_CERT || 'exchange.crt');
-    app.set('WSFED_KEY', opts.WSFED_KEY || 'exchange.key');
-    app.set('WSFED_PKCS7', opts.WSFED_PKCS7 || 'exchange.p7b');
+    // app.js reads these at startup (util/signingFiles.js); the fixtures stand in here
+    app.set('WSFED_SIGNING', readSigningFiles(path.join(__dirname, '../../fixtures'), {
+        cert: 'test-cert.pem', key: 'test-cert.key', pkcs7: 'test-cert.pem',
+    }));
     app.set('INVALID_LOGIN_REDIRECT', opts.INVALID_LOGIN_REDIRECT || '');
     app.set('WSFED_TOKEN_LIFETIME', opts.WSFED_TOKEN_LIFETIME || 600);
     app.set('SESSION_SECRET', 'test-secret');
