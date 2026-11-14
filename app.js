@@ -229,6 +229,8 @@ app.use(session({
     // __Host- prefix forbids the attribute.
     cookie: {
         ...SESSION_COOKIE_OPTIONS,
+        // CodeQL cannot see `secure` through the spread. Keep this line.
+        secure: true,
         maxAge: 600000,
     },
     saveUninitialized: false,
