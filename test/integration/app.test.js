@@ -347,3 +347,29 @@ describe('startup config', () => {
         expect(console.error).toHaveBeenCalledWith(expect.stringContaining('WSFED_TOKEN_LIFETIME'));
     });
 });
+
+describe('log records keep the query string out (signed messages and one-time IDs travel in it)', () => {
+    function recordsFor(fn) {
+        const write = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        return fn().then(() => {
+            const lines = write.mock.calls.map((c) => String(c[0]));
+            write.mockRestore();
+            return lines.map((l) => JSON.parse(l));
+        }, (err) => { write.mockRestore(); throw err; });
+    }
+
+    test('the access log holds the path, not the query', async () => {
+        const records = await recordsFor(() => request(app).get('/saml2/logout/callback').query({ SAMLRequest: 'secret-request', Signature: 'y' }));
+        const access = records.find((r) => r.message === 'access_log');
+        expect(access.url.full.endsWith('/saml2/logout/callback')).toBe(true);
+        expect(access.url.path).toBe('/saml2/logout/callback');
+        expect(access.url.query).toBeUndefined();
+        expect(JSON.stringify(records)).not.toContain('secret-request');
+    });
+
+    test('the error log holds the path, not the query', async () => {
+        const records = await recordsFor(() => request(app).get('/wsfed').query({ wa: 'wsignin1.0', wtrealm: 'https://evil.example/', wctx: 'ctx-secret' }));
+        const error = records.find((r) => r['log.level'] === 'warn' && r['http.response.status_code'] === 403);
+        expect(error['url.path']).toBe('/wsfed');
+    });
+});
