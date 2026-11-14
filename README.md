@@ -16,11 +16,11 @@ All configuration is done via environment variables.
 | `HTTPS_CERT` | `../selfsigned.crt` | Path to the TLS certificate (relative to `bin/`) |
 | `PORT` | `3000` | Listening port |
 | `TRUST_PROXY` | `0` | **Number of reverse-proxy hops** in front of the app. Drives Express' `trust proxy`, so `req.ip`, the rate limiters and the secure-cookie check read the real client. `0` trusts nothing; use `1` behind a single nginx. The legacy values `true`/`false` are still accepted and mean `1`/`0`. The proxy must send `X-Forwarded-For` — otherwise every request appears to come from the proxy and the per-client rate limits collapse into one shared bucket. |
-| `SESSION_SECRET` | random | Secret used to sign the session cookie. **Must be set to a stable secret in production.** |
+| `SESSION_SECRET` | random | Secret used to sign the session cookie and to encrypt the sign-out record cookie (`__Host-wsfed_sso`). **Must be set to a stable secret in production**: with the random default, a restart makes every sign-out record issued before it unreadable, so `wsignout1.0` no longer reaches the RPs or the IdP for those browsers. Logged as a `warn` record at startup when `NODE_ENV=production`. |
 | `SESSION_SAMESITE` | `none` | `SameSite` of the session cookie: `none`, `lax` or `strict`. Keep `none` when the IdP is on another site than this proxy (another registrable domain): the IdP's cross-site POST to `{SAML2_ROOT}/callback` then carries the session cookie. `lax` blocks that POST just like `strict`. `strict` works only with an IdP on the same site. With every value, `{SAML2_ROOT}/callback` accepts a response only with the `RelayState` of a sign-in that the same browser session started. Any other value stops the proxy at startup. |
 | `SESSION_MAX_STORE` | `500` | Maximum number of concurrent sessions held in memory. Prevents unbounded memory growth. |
 | `INVALID_LOGIN_REDIRECT` | — | URL to redirect to when a request arrives at `/wsfed` with no valid WS-Fed parameters. Returns `400` if unset. |
-| `NODE_ENV` | — | Set to `production` to enable production guards: fatal startup error if `WSFED_ISSUER` contains `localhost`, or if either SAML signature requirement has been disabled. |
+| `NODE_ENV` | — | Set to `production` to enable production guards. Fatal startup error if `WSFED_ISSUER` or `SAML2_IDP` is not `https` or points to a loopback host (`localhost`, `127.0.0.1`, `::1`), if `WSFED_ALLOWED_REALMS` holds an `http` realm (the token form can post to `https` only), or if either SAML signature requirement has been disabled. A `warn` log record at startup when `SESSION_SECRET` or `SAML2_IDP_ISSUER` is not set. Outside production, `http` URLs are accepted for local stacks. |
 
 ### WS-Federation
 

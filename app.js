@@ -38,6 +38,8 @@ const { parseIntEnv } = require('./util/parseIntEnv');
 const { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } = require('./util/sessionCookie');
 const { userFromProfile, ClaimError } = require('./util/samlProfile');
 const { readSigningFiles } = require('./util/signingFiles');
+const { parseHttpsUrl, isLoopbackHost } = require('./util/validateConfig');
+const { logWarn } = require('./util/logError');
 // not exported from the package index
 const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
 const app = express();
@@ -167,12 +169,25 @@ const wsfedRouter = require('./routes/wsfed');
         process.exit(1);
     }
 
-    if (process.env.NODE_ENV === 'production') {
-        const issuer = app.get("WSFED_ISSUER");
-        if (issuer.includes('localhost')) {
-            console.error('FATAL: WSFED_ISSUER contains "localhost" in a production environment. Set WSFED_ISSUER to the public proxy URL.');
+    const production = process.env.NODE_ENV === 'production';
+
+    // The session cookie host and the SAML callbackUrl come from WSFED_ISSUER, the
+    // AuthnRequest goes to SAML2_IDP. http is for a local stack only.
+    for (const name of ["WSFED_ISSUER", "SAML2_IDP"]) {
+        let url;
+        try {
+            url = parseHttpsUrl(name, app.get(name), { allowHttp: !production });
+        } catch (err) {
+            console.error(`FATAL: ${err.message}`);
             process.exit(1);
         }
+        if (production && isLoopbackHost(url)) {
+            console.error(`FATAL: ${name} points to the loopback host "${url.host}" in a production environment. Set it to the public URL.`);
+            process.exit(1);
+        }
+    }
+
+    if (production) {
         if (!app.get("SAML2_WANT_ASSERTIONS_SIGNED")) {
             console.error('FATAL: SAML2_WANT_ASSERTIONS_SIGNED is disabled in a production environment. Unsigned assertions must never be accepted.');
             process.exit(1);
@@ -180,6 +195,18 @@ const wsfedRouter = require('./routes/wsfed');
         if (!app.get("SAML2_WANT_AUTHN_RESPONSE_SIGNED")) {
             console.error('FATAL: SAML2_WANT_AUTHN_RESPONSE_SIGNED is disabled in a production environment. Unsigned SAML responses must never be accepted.');
             process.exit(1);
+        }
+        // The token form posts to https targets only (CSP form-action), so an http realm never gets a token.
+        const httpRealm = app.get("WSFED_ALLOWED_REALMS").find((origin) => origin.startsWith('http:'));
+        if (httpRealm !== undefined) {
+            console.error(`FATAL: WSFED_ALLOWED_REALMS contains "${httpRealm}" in a production environment. The token form can post to https realms only.`);
+            process.exit(1);
+        }
+        if (!process.env.SESSION_SECRET) {
+            logWarn('SESSION_SECRET is not set: the random secret changes at every restart, and every sign-out record (__Host-wsfed_sso) issued before the restart becomes unreadable');
+        }
+        if (app.get("SAML2_IDP_ISSUER") === "") {
+            logWarn('SAML2_IDP_ISSUER is not set: the <Issuer> of IdP assertions and logout messages is not checked');
         }
     }
 })();

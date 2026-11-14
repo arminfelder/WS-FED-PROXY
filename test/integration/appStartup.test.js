@@ -79,4 +79,83 @@ describe('app.js startup', () => {
         expect(thrown.message).toBe('1');
         expect(fatal.join('\n')).toMatch(new RegExp(`FATAL:.*${file.replace('.', '\\.')}`));
     });
+
+    function expectFatal(env, pattern) {
+        const { thrown, fatal } = startApp(env);
+        expect(thrown).toBeInstanceOf(ExitError);
+        expect(thrown.message).toBe('1');
+        expect(fatal.join('\n')).toMatch(pattern);
+    }
+
+    describe('URL settings', () => {
+        test.each([
+            ['WSFED_ISSUER', 'proxy.example.com/wsfed'],
+            ['WSFED_ISSUER', 'ftp://proxy.example.com/wsfed'],
+            ['SAML2_IDP', 'idp.example.com'],
+        ])('exits 1 when %s is %p', (name, value) => {
+            expectFatal({ [name]: value }, new RegExp(`FATAL: ${name}`));
+        });
+
+        test('accepts http URLs outside production', () => {
+            const { thrown } = startApp({ WSFED_ISSUER: 'http://proxy.example.com/wsfed', SAML2_IDP: 'http://idp.example.com/saml' });
+            expect(thrown).toBeUndefined();
+        });
+
+        test.each(['WSFED_ISSUER', 'SAML2_IDP'])('refuses an http %s in production', (name) => {
+            expectFatal({ NODE_ENV: 'production', [name]: 'http://host.example.com/x' }, new RegExp(`FATAL: ${name}.*https`));
+        });
+
+        test.each([
+            ['WSFED_ISSUER', 'https://localhost:3000/wsfed'],
+            ['SAML2_IDP', 'https://127.0.0.1:8443/saml'],
+        ])('refuses a loopback %s in production', (name, value) => {
+            expectFatal({ NODE_ENV: 'production', [name]: value }, new RegExp(`FATAL: ${name}.*loopback`));
+        });
+
+        test('a hostname that only starts with "localhost" is not loopback', () => {
+            const { thrown } = startApp({ NODE_ENV: 'production', WSFED_ISSUER: 'https://localhost.corp.example/wsfed', SESSION_SECRET: 's', SAML2_IDP_ISSUER: 'i' });
+            expect(thrown).toBeUndefined();
+        });
+    });
+
+    describe('WSFED_ALLOWED_REALMS in production', () => {
+        test('refuses an http realm: CSP form-action https: would block the token POST', () => {
+            expectFatal({ NODE_ENV: 'production', WSFED_ALLOWED_REALMS: 'https://exchange.corp,http://owa.corp' }, /FATAL: WSFED_ALLOWED_REALMS.*http:\/\/owa\.corp/);
+        });
+
+        test('accepts an http realm outside production', () => {
+            expect(startApp({ WSFED_ALLOWED_REALMS: 'http://owa.corp' }).thrown).toBeUndefined();
+        });
+    });
+
+    describe('production warnings', () => {
+        function warnings(env) {
+            const write = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+            let lines;
+            try {
+                const { thrown } = startApp(env);
+                expect(thrown).toBeUndefined();
+            } finally {
+                lines = write.mock.calls.map((c) => String(c[0]));
+                write.mockRestore();
+            }
+            return lines.map((l) => JSON.parse(l)).filter((r) => r['log.level'] === 'warn');
+        }
+
+        test('warns when SESSION_SECRET is random: sign-out records do not survive a restart', () => {
+            const messages = warnings({ NODE_ENV: 'production', SAML2_IDP_ISSUER: 'i' }).map((r) => r.message);
+            expect(messages).toHaveLength(1);
+            expect(messages[0]).toMatch(/SESSION_SECRET/);
+        });
+
+        test('warns when SAML2_IDP_ISSUER is empty: the issuer is not checked', () => {
+            const messages = warnings({ NODE_ENV: 'production', SESSION_SECRET: 's' }).map((r) => r.message);
+            expect(messages).toHaveLength(1);
+            expect(messages[0]).toMatch(/SAML2_IDP_ISSUER/);
+        });
+
+        test('is silent when both are set', () => {
+            expect(warnings({ NODE_ENV: 'production', SESSION_SECRET: 's', SAML2_IDP_ISSUER: 'i' })).toHaveLength(0);
+        });
+    });
 });
