@@ -47,8 +47,17 @@ describe('GET /saml2/failure', () => {
 });
 
 describe('GET /saml2/login', () => {
-    test('redirects to failureRedirect when authentication fails', async () => {
-        const app = buildApp();
+    test('without a pending WS-Fed sign-in it is refused before the IdP is contacted', async () => {
+        // A login without wsfed_args ends in continueSignIn() as a full sign-out,
+        // so a bare link to this path would only end the IdP session.
+        passport.authenticate.mockClear();
+        const res = await request(buildApp()).get('/saml2/login');
+        expect(res.status).toBe(400);
+        expect(passport.authenticate).not.toHaveBeenCalled();
+    });
+
+    test('with a pending WS-Fed sign-in it redirects to failureRedirect when authentication fails', async () => {
+        const app = buildApp({ sessionWsfedArgs: { wa: 'wsignin1.0', wtrealm: 'https://exchange.corp/owa' } });
         const res = await request(app).get('/saml2/login');
         // With our mock, authenticate() immediately hits failureRedirect
         expect(res.status).toBe(302);

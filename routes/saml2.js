@@ -33,8 +33,15 @@ async function takeRelay(relayState) {
 
 const router = express.Router();
 
-// wsignin1.0 no longer redirects here. Kept for links and bookmarks.
-router.get('/login', startSamlLogin);
+// wsignin1.0 no longer redirects here. Kept for a retry of a pending sign-in.
+// Only the wsignin1.0 entry point stores wsfed_args. Without them the login would
+// end in continueSignIn() as a sign-out, so refuse it before the IdP is contacted.
+router.get('/login', function (req, res, next) {
+    if (!req.session.wsfed_args) {
+        return next(createError(400, 'no pending WS-Fed sign-in; start at the wsignin1.0 endpoint'));
+    }
+    return startSamlLogin(req, res, next);
+});
 
 // Where to land once the local session is gone: the sign-out wreply (WS-Federation 1.2 §13.2.4.1)
 // if it is still allowlisted, otherwise a "signed out" page, as AD FS does.
