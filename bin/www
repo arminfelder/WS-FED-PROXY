@@ -1,106 +1,73 @@
 #!/usr/bin/env node
 
-/**
- * Module dependencies.
- */
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
+const path = require('path');
+const debug = require('debug')('ws-fed-saml-proxy:server');
+const { parseIntEnv } = require('../util/parseIntEnv');
+
+function fatal(message) {
+    console.error(`FATAL: ${message}`);
+    process.exit(1);
+}
+
+// A non-numeric PORT would make http.Server listen on a named pipe of that name.
+let port;
+try {
+    port = parseIntEnv('PORT', process.env.PORT, { def: 3000, min: 1, max: 65535 });
+} catch (err) {
+    fatal(err.message);
+}
 
 const app = require('../app');
-const debug = require('debug')('ws-fed-saml-proxy:server');
-const http = require('http');
-
-/**
- * Get port from environment and store in Express.
- */
-
-const port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
 
-/**
- * Create HTTP server.
- */
-
-// debug only
-const fs = require("fs");
-const https = require("https");
-const path = require("path");
-
-var server = {};
-
-if(process.env.hasOwnProperty("HTTPS") && process.env.HTTPS.toLowerCase() === "true") {
-  const key = fs.readFileSync(path.join(__dirname, (process.env.HTTPS_KEY || '../selfsigned.key')));
-  const cert = fs.readFileSync(path.join(__dirname, (process.env.HTTPS_CERT || '../selfsigned.crt')));
-  const options = {
-    key: key,
-    cert: cert
-  };
-  server = https.createServer(options, app);
-}else{
-  server = http.createServer(app);
+// TLS on the Node process itself is for local use. The deployment terminates TLS in front.
+function tlsOptions() {
+    const read = (name, fallback) => fs.readFileSync(path.join(__dirname, process.env[name] || fallback));
+    try {
+        return {
+            key: read('HTTPS_KEY', '../selfsigned.key'),
+            cert: read('HTTPS_CERT', '../selfsigned.crt'),
+        };
+    } catch (err) {
+        return fatal(`cannot read the HTTPS key or certificate: ${err.message}`);
+    }
 }
-/**
- * Listen on provided port, on all network interfaces.
- */
+
+const useTls = (process.env.HTTPS || '').toLowerCase() === 'true';
+const server = useTls ? https.createServer(tlsOptions(), app) : http.createServer(app);
 
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
 
-/**
- * Normalize a port into a number, string, or false.
- */
-
-function normalizePort(val) {
-  var port = parseInt(val, 10);
-
-  if (isNaN(port)) {
-    // named pipe
-    return val;
-  }
-
-  if (port >= 0) {
-    // port number
-    return port;
-  }
-
-  return false;
+// Node is PID 1 in the container, so nothing else turns SIGTERM into a clean stop.
+// Idle keep-alive connections are closed at once; in-flight responses get ten seconds.
+function shutdown(signal) {
+    debug(`${signal}: closing the server`);
+    server.close(() => process.exit(0));
+    server.closeIdleConnections();
+    setTimeout(() => process.exit(1), 10000).unref();
 }
-
-/**
- * Event listener for HTTP server "error" event.
- */
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 function onError(error) {
-  if (error.syscall !== 'listen') {
-    throw error;
-  }
-
-  var bind = typeof port === 'string'
-    ? 'Pipe ' + port
-    : 'Port ' + port;
-
-  // handle specific listen errors with friendly messages
-  switch (error.code) {
-    case 'EACCES':
-      console.error(bind + ' requires elevated privileges');
-      process.exit(1);
-      break;
-    case 'EADDRINUSE':
-      console.error(bind + ' is already in use');
-      process.exit(1);
-      break;
-    default:
-      throw error;
-  }
+    if (error.syscall !== 'listen') {
+        throw error;
+    }
+    switch (error.code) {
+        case 'EACCES':
+            return fatal(`port ${port} requires elevated privileges`);
+        case 'EADDRINUSE':
+            return fatal(`port ${port} is already in use`);
+        default:
+            throw error;
+    }
 }
 
-/**
- * Event listener for HTTP server "listening" event.
- */
-
 function onListening() {
-  const addr = server.address();
-  const bind = typeof addr === 'string'
-    ? 'pipe ' + addr
-    : 'port ' + addr.port;
-  debug('Listening on ' + bind);
+    debug(`Listening on port ${server.address().port}`);
 }
