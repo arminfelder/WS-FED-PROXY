@@ -140,6 +140,50 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
             const res = await request(app).get('/saml2/logout/callback').query({ SAMLRequest: 'x' });
             expect(res.status).toBe(400);
         });
+
+        describe('redirect binding', () => {
+            const zlib = require('zlib');
+            const crypto = require('crypto');
+            const SIGALG = 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256';
+            const enc = encodeURIComponent;
+            const deflated = (xml) => zlib.deflateRawSync(Buffer.from(xml)).toString('base64');
+            const logoutRequest = (nameID) => deflated(
+                '<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ' +
+                'xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_lq2" Version="2.0" ' +
+                `IssueInstant="${new Date().toISOString()}">` +
+                '<saml:Issuer>https://idp.example.com/saml</saml:Issuer>' +
+                `<saml:NameID>${nameID}</saml:NameID>` +
+                '</samlp:LogoutRequest>');
+            // SAML 2.0 bindings §3.4.4.1: the IdP signs these octets of the query string
+            const idpSigned = (octets) =>
+                `${octets}&Signature=${enc(crypto.createSign('RSA-SHA256').update(octets).sign(KEY, 'base64'))}`;
+            const get = (rawQuery) => request(app).get('/saml2/logout/callback?' + rawQuery).set('Cookie', recordCookie());
+
+            test('a LogoutRequest signed by the IdP starts the cleanup', async () => {
+                const res = await get(idpSigned(`SAMLRequest=${enc(logoutRequest('u@corp'))}&SigAlg=${enc(SIGALG)}`));
+                expect(res.status).toBe(302);
+                expect(new URL(res.headers.location).searchParams.get('wa')).toBe('wsignoutcleanup1.0');
+            });
+
+            test('a forged LogoutRequest under a percent-encoded key cannot borrow the signature of another message', async () => {
+                const genuine = idpSigned(`SAMLResponse=${enc(deflated('<samlp:LogoutResponse/>'))}&SigAlg=${enc(SIGALG)}`);
+                const res = await get(`SAMLReques%74=${enc(logoutRequest('u@corp'))}&${genuine}`);
+                expect(res.status).toBe(400);
+                expect(String(res.headers['set-cookie'])).not.toMatch(/__Host-wsfed_sso=;/);
+            });
+
+            test('a RelayState under a percent-encoded key, outside the signature, is refused', async () => {
+                const genuine = idpSigned(`SAMLRequest=${enc(logoutRequest('u@corp'))}&SigAlg=${enc(SIGALG)}`);
+                const res = await get(`${genuine}&RelayStat%65=unsigned`);
+                expect(res.status).toBe(400);
+            });
+
+            test('a query with both SAMLRequest and SAMLResponse is refused', async () => {
+                const genuine = idpSigned(`SAMLRequest=${enc(logoutRequest('u@corp'))}&SigAlg=${enc(SIGALG)}`);
+                const res = await get(`${genuine}&SAMLResponse=x`);
+                expect(res.status).toBe(400);
+            });
+        });
     });
 
     test('a signed LogoutResponse completes the sign-out', async () => {
