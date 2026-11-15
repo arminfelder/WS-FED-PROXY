@@ -27,11 +27,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * @throws {Error} if the value is neither a legacy boolean nor a whole number
  */
 function parseTrustProxy(raw) {
-    if (raw === undefined || raw === null || String(raw).trim() === "") return 0;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return 0;
 
     const value = String(raw).trim().toLowerCase();
-    if (value === "true") return 1;
-    if (value === "false") return 0;
+    if (value === 'true') return 1;
+    if (value === 'false') return 0;
 
     if (!/^\d+$/.test(value)) {
         throw new Error(`TRUST_PROXY must be a non-negative whole number of proxy hops (or the legacy true/false), got "${raw}"`);

@@ -15,15 +15,15 @@ GNU General Public License for more details.
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-var fm = {
-  'nameIdentifier': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
-  'email': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
-  'name': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
-  'givenname': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname',
-  'surname': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname',
-  'upn': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn',
-  'groups': 'http://schemas.xmlsoap.org/claims/Group',
-  'sid': "http://schemas.microsoft.com/ws/2008/06/identity/claims/primarysid"
+const fm = {
+    'nameIdentifier': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
+    'email': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+    'name': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
+    'givenname': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname',
+    'surname': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname',
+    'upn': 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn',
+    'groups': 'http://schemas.xmlsoap.org/claims/Group',
+    'sid': 'http://schemas.microsoft.com/ws/2008/06/identity/claims/primarysid',
 };
 
 /**
@@ -41,10 +41,10 @@ var fm = {
  * @param  {Object} pu Passport.js user profile
  */
 function OWAProfileMapper (pu) {
-  if(!(this instanceof OWAProfileMapper)) {
-    return new OWAProfileMapper(pu);
-  }
-  this._pu = pu;
+    if (!(this instanceof OWAProfileMapper)) {
+        return new OWAProfileMapper(pu);
+    }
+    this._pu = pu;
 }
 
 /**
@@ -53,13 +53,13 @@ function OWAProfileMapper (pu) {
  * @return {Object}    WsFederation claim identity
  */
 OWAProfileMapper.prototype.getClaims = function () {
-  const claims = {};
+    const claims = {};
 
-  claims[fm.nameIdentifier]  = this._pu.id;
-  claims[fm.upn] = this._pu.upn;
-  claims[fm.sid] = this._pu.sid;
+    claims[fm.nameIdentifier]  = this._pu.id;
+    claims[fm.upn] = this._pu.upn;
+    claims[fm.sid] = this._pu.sid;
 
-  return claims;
+    return claims;
 };
 
 /**
@@ -68,11 +68,11 @@ OWAProfileMapper.prototype.getClaims = function () {
  * @return {Object} object containing a nameIdentifier property and optional nameIdentifierFormat.
  */
 OWAProfileMapper.prototype.getNameIdentifier = function () {
-  var claims = this.getClaims();
+    const claims = this.getClaims();
 
-  return {
-    nameIdentifier: claims[fm.nameIdentifier]
-  };
+    return {
+        nameIdentifier: claims[fm.nameIdentifier],
+    };
 
 };
 
@@ -83,20 +83,20 @@ OWAProfileMapper.prototype.getNameIdentifier = function () {
  * @return {[type]}    WsFederation claim identity
  */
 OWAProfileMapper.prototype.metadata = [ {
-  id: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
-  optional: false,
-  displayName: "Name ID",
-  description: "The unique identifier of the user"
+    id: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
+    optional: false,
+    displayName: 'Name ID',
+    description: 'The unique identifier of the user',
 }, {
-  id: "http://schemas.microsoft.com/ws/2008/06/identity/claims/primarysid",
-  optional: false,
-  displayName: "Primary SID",
-  description: "The primary SID of the user"
+    id: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/primarysid',
+    optional: false,
+    displayName: 'Primary SID',
+    description: 'The primary SID of the user',
 }, {
-  id: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn",
-  optional: false,
-  displayName: "UPN",
-  description: "The user principal name (UPN) of the user"
+    id: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn',
+    optional: false,
+    displayName: 'UPN',
+    description: 'The user principal name (UPN) of the user',
 }];
 
 module.exports = OWAProfileMapper;

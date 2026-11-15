@@ -75,11 +75,11 @@ function takeSignIn(session, relayState) {
 function startSamlLogin(req, res, next) {
     const args = req.session.wsfed_args;
     // ForceAuthn makes the IdP prompt again (WS-Federation 1.2 §13.2.2, wfresh)
-    const strategy = args && (args.wfresh === "0" || args.reauthRequested) ? "saml-force" : "saml";
+    const strategy = args && (args.wfresh === '0' || args.reauthRequested) ? 'saml-force' : 'saml';
     const relayState = newRelayState();
     rememberSignIn(req.session, relayState);
     return passport.authenticate(strategy, {
-        failureRedirect: req.app.get("SAML2_ROOT") + "/failure",
+        failureRedirect: req.app.get('SAML2_ROOT') + '/failure',
         additionalParams: { RelayState: relayState },
     })(req, res, next);
 }

@@ -12,7 +12,6 @@ jest.mock('passport', () => {
     };
 });
 
-
 // Mock wsfed and fs so route tests don't need real certs
 jest.mock('wsfed', () => {
     const auth = jest.fn((opts) => (req, res, next) => {
@@ -26,21 +25,9 @@ jest.mock('wsfed', () => {
         }
         res.status(200).send('<html><body>token-issued</body></html>');
     });
-    const metadata = jest.fn(() => (req, res) => {
-        res.status(200).send('<EntityDescriptor issuer="' + _capturedIssuer + '"/>');
-    });
-    let _capturedIssuer = '';
-    // Wrap metadata to capture issuer argument
-    const metadataReal = (opts) => {
-        _capturedIssuer = opts.issuer;
-        return metadata(opts);
-    };
     return {
         auth,
-        metadata: (opts) => {
-            _capturedIssuer = opts.issuer;
-            return (req, res) => res.status(200).send(`<EntityDescriptor issuer="${opts.issuer}"/>`);
-        },
+        metadata: (opts) => (req, res) => res.status(200).send(`<EntityDescriptor issuer="${opts.issuer}"/>`),
         federationServerService: {
             wsdl: (req, res) => res.status(200).send('<wsdl/>'),
             thumbprint: jest.fn(() => (req, res) => res.status(200).send('<thumbprint/>')),
@@ -131,7 +118,8 @@ describe('GET /wsfed — HTTP Parameter Pollution resistance', () => {
         const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
         const res = await request(app).get('/wsfed?wa=wsignin1.0&wtrealm=https://exchange.corp/owa&wreply=https://exchange.corp/cb&wreply=https://attacker.com');
         expect(res.status).toBe(400);
-    });});
+    });
+});
 
 describe('GET /wsfed — wtrealm allowlist enforcement', () => {
     test('allows request when wtrealm is in WSFED_ALLOWED_REALMS', async () => {

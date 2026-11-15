@@ -21,8 +21,8 @@ const http = require('http');
 const path = require('path');
 const { formatHttpRequest, formatHttpResponse, formatError } = require('@elastic/ecs-helpers');
 const session = require('express-session');
-const MemoryStore = require('memorystore')(session)
-const fs = require("fs");
+const MemoryStore = require('memorystore')(session);
+const fs = require('fs');
 const crypto = require('crypto');
 const passport = require('passport');
 const SamlStrategy = require('@node-saml/passport-saml').Strategy;
@@ -54,7 +54,7 @@ app.use(helmet.contentSecurityPolicy({
         scriptSrc:  [(_req, res) => `'nonce-${res.locals.cspNonce}'`],
         // Allow the form POST to any HTTPS target — the allowlist in validateRedirect.js
         // enforces the actual destination; CSP here just blocks non-HTTPS targets.
-        formAction: ["https:"],
+        formAction: ['https:'],
     },
 }));
 app.use(helmet.crossOriginEmbedderPolicy());
@@ -79,63 +79,63 @@ const saml2Router = require('./routes/saml2');
 const wsfedRouter = require('./routes/wsfed');
 
 (function () {
-    app.set("SESSION_SECRET",process.env.SESSION_SECRET || crypto.randomBytes(120).toString('hex'));
-    app.set("SAML2_ISSUER",process.env.SAML2_ISSUER || 'passport-js');
-    app.set("SAML2_IDENTIFIER_FORMAT",process.env.SAML2_IDENTIFIER_FORMAT || 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified');
-    app.set("SAML2_IDP",process.env.SAML2_IDP || 'https://localhost:8443/auth/realms/master/protocol/saml');
-    app.set("SAML2_CLAIMS_UPN",process.env.SAML2_CLAIMS_UPN || "upn");
-    app.set("SAML2_CLAIMS_SID", process.env.SAML2_CLAIMS_SID || "sid");
-    const sidBase64 = (process.env.SAML2_CLAIMS_SID_BASE64 || "true").trim().toLowerCase();
-    if (sidBase64 !== "true" && sidBase64 !== "false") {
+    app.set('SESSION_SECRET', process.env.SESSION_SECRET || crypto.randomBytes(120).toString('hex'));
+    app.set('SAML2_ISSUER', process.env.SAML2_ISSUER || 'passport-js');
+    app.set('SAML2_IDENTIFIER_FORMAT', process.env.SAML2_IDENTIFIER_FORMAT || 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified');
+    app.set('SAML2_IDP', process.env.SAML2_IDP || 'https://localhost:8443/auth/realms/master/protocol/saml');
+    app.set('SAML2_CLAIMS_UPN', process.env.SAML2_CLAIMS_UPN || 'upn');
+    app.set('SAML2_CLAIMS_SID', process.env.SAML2_CLAIMS_SID || 'sid');
+    const sidBase64 = (process.env.SAML2_CLAIMS_SID_BASE64 || 'true').trim().toLowerCase();
+    if (sidBase64 !== 'true' && sidBase64 !== 'false') {
         console.error('FATAL: SAML2_CLAIMS_SID_BASE64 must be "true" or "false"');
         process.exit(1);
     }
-    app.set("SAML2_CLAIMS_SID_BASE64", sidBase64 === "true");
+    app.set('SAML2_CLAIMS_SID_BASE64', sidBase64 === 'true');
     // false: sign-out ends the local session and the RP sessions only. The IdP session stays.
-    const slo = (process.env.SAML2_SLO || "true").trim().toLowerCase();
-    if (slo !== "true" && slo !== "false") {
+    const slo = (process.env.SAML2_SLO || 'true').trim().toLowerCase();
+    if (slo !== 'true' && slo !== 'false') {
         console.error('FATAL: SAML2_SLO must be "true" or "false"');
         process.exit(1);
     }
-    app.set("SAML2_SLO", slo === "true");
+    app.set('SAML2_SLO', slo === 'true');
     // redirect: a top-level navigation to each RP (util/signoutPage.js). image: one page with images.
-    const cleanup = (process.env.WSFED_SIGNOUT_CLEANUP || "redirect").trim().toLowerCase();
-    if (cleanup !== "redirect" && cleanup !== "image") {
+    const cleanup = (process.env.WSFED_SIGNOUT_CLEANUP || 'redirect').trim().toLowerCase();
+    if (cleanup !== 'redirect' && cleanup !== 'image') {
         console.error('FATAL: WSFED_SIGNOUT_CLEANUP must be "redirect" or "image"');
         process.exit(1);
     }
-    app.set("WSFED_SIGNOUT_CLEANUP", cleanup);
-    app.set("SAML2_IDP_PUB_KEY", process.env.SAML2_IDP_PUB_KEY || "idp.pem");
+    app.set('WSFED_SIGNOUT_CLEANUP', cleanup);
+    app.set('SAML2_IDP_PUB_KEY', process.env.SAML2_IDP_PUB_KEY || 'idp.pem');
     // Optional SP signing pair: with it, the AuthnRequest and the logout messages are signed,
     // and the IdP can require that. Both or neither.
-    const spKey = process.env.SAML2_SP_KEY || "";
-    const spCert = process.env.SAML2_SP_CERT || "";
-    if ((spKey === "") !== (spCert === "")) {
+    const spKey = process.env.SAML2_SP_KEY || '';
+    const spCert = process.env.SAML2_SP_CERT || '';
+    if ((spKey === '') !== (spCert === '')) {
         console.error('FATAL: SAML2_SP_KEY and SAML2_SP_CERT must be set together (file names in certs/).');
         process.exit(1);
     }
-    app.set("SAML2_SP_KEY", spKey);
-    app.set("SAML2_SP_CERT", spCert);
+    app.set('SAML2_SP_KEY', spKey);
+    app.set('SAML2_SP_CERT', spCert);
     // expected <Issuer> of IdP messages; not checked when empty. node-saml applies it to
     // logout messages only, util/samlProfile.js applies it to the sign-in assertion.
-    app.set("SAML2_IDP_ISSUER", process.env.SAML2_IDP_ISSUER || "");
-    app.set("SAML2_ROOT", process.env.SAML2_ROOT || "/saml2");
-    app.set("WSFED_ISSUER", process.env.WSFED_ISSUER || "https://localhost:3000/wsfed");
-    app.set("WSFED_CERT", process.env.WSFED_CERT || "exchange.crt");
-    app.set("WSFED_KEY", process.env.WSFED_KEY || "exchange.key");
-    app.set("WSFED_PKCS7", process.env.WSFED_PKCS7 || "exchange.p7b");
-    app.set("WSFED_ROOT", process.env.WSFED_ROOT || "/wsfed");
-    app.set("INVALID_LOGIN_REDIRECT", process.env.INVALID_LOGIN_REDIRECT || "");
-        try {
+    app.set('SAML2_IDP_ISSUER', process.env.SAML2_IDP_ISSUER || '');
+    app.set('SAML2_ROOT', process.env.SAML2_ROOT || '/saml2');
+    app.set('WSFED_ISSUER', process.env.WSFED_ISSUER || 'https://localhost:3000/wsfed');
+    app.set('WSFED_CERT', process.env.WSFED_CERT || 'exchange.crt');
+    app.set('WSFED_KEY', process.env.WSFED_KEY || 'exchange.key');
+    app.set('WSFED_PKCS7', process.env.WSFED_PKCS7 || 'exchange.p7b');
+    app.set('WSFED_ROOT', process.env.WSFED_ROOT || '/wsfed');
+    app.set('INVALID_LOGIN_REDIRECT', process.env.INVALID_LOGIN_REDIRECT || '');
+    try {
         // seconds; the only credential outliving the session, so keep it short
-        app.set("WSFED_TOKEN_LIFETIME", parseIntEnv("WSFED_TOKEN_LIFETIME", process.env.WSFED_TOKEN_LIFETIME, { def: 600, min: 60, max: 3600 }));
-        app.set("SESSION_MAX_STORE", parseIntEnv("SESSION_MAX_STORE", process.env.SESSION_MAX_STORE, { def: 500, min: 1, max: 100000 }));
-        app.set("SAML2_CLOCK_SKEW_MS", parseIntEnv("SAML2_CLOCK_SKEW_MS", process.env.SAML2_CLOCK_SKEW_MS, { def: 3000, min: 0, max: 300000 }));
+        app.set('WSFED_TOKEN_LIFETIME', parseIntEnv('WSFED_TOKEN_LIFETIME', process.env.WSFED_TOKEN_LIFETIME, { def: 600, min: 60, max: 3600 }));
+        app.set('SESSION_MAX_STORE', parseIntEnv('SESSION_MAX_STORE', process.env.SESSION_MAX_STORE, { def: 500, min: 1, max: 100000 }));
+        app.set('SAML2_CLOCK_SKEW_MS', parseIntEnv('SAML2_CLOCK_SKEW_MS', process.env.SAML2_CLOCK_SKEW_MS, { def: 3000, min: 0, max: 300000 }));
         // seconds; how long sign-out can still reach the RPs and the IdP session
-        app.set("WSFED_SSO_RECORD_MAX_AGE", parseIntEnv("WSFED_SSO_RECORD_MAX_AGE", process.env.WSFED_SSO_RECORD_MAX_AGE, { def: 28800, min: 60, max: 604800 }));
+        app.set('WSFED_SSO_RECORD_MAX_AGE', parseIntEnv('WSFED_SSO_RECORD_MAX_AGE', process.env.WSFED_SSO_RECORD_MAX_AGE, { def: 28800, min: 60, max: 604800 }));
         // requests in one minute for each client address; one sign-in is three requests, one of them a callback
-        app.set("RATE_LIMIT_PER_MINUTE", parseIntEnv("RATE_LIMIT_PER_MINUTE", process.env.RATE_LIMIT_PER_MINUTE, { def: 60, min: 1, max: 100000 }));
-        app.set("RATE_LIMIT_CALLBACK_PER_MINUTE", parseIntEnv("RATE_LIMIT_CALLBACK_PER_MINUTE", process.env.RATE_LIMIT_CALLBACK_PER_MINUTE, { def: 20, min: 1, max: 100000 }));
+        app.set('RATE_LIMIT_PER_MINUTE', parseIntEnv('RATE_LIMIT_PER_MINUTE', process.env.RATE_LIMIT_PER_MINUTE, { def: 60, min: 1, max: 100000 }));
+        app.set('RATE_LIMIT_CALLBACK_PER_MINUTE', parseIntEnv('RATE_LIMIT_CALLBACK_PER_MINUTE', process.env.RATE_LIMIT_CALLBACK_PER_MINUTE, { def: 20, min: 1, max: 100000 }));
     } catch (err) {
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
@@ -148,21 +148,21 @@ const wsfedRouter = require('./routes/wsfed');
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
     }
-    app.set("TRUST_PROXY", trustProxyHops);
+    app.set('TRUST_PROXY', trustProxyHops);
     app.set('trust proxy', trustProxyHops);
     try {
-        app.set("WSFED_ALLOWED_REALMS", parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ""));
+        app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(process.env.WSFED_ALLOWED_REALMS || ''));
     } catch (err) {
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
     }
-    app.set("SAML2_WANT_ASSERTIONS_SIGNED", (process.env.SAML2_WANT_ASSERTIONS_SIGNED || "true").toLowerCase() !== "false");
-    app.set("SAML2_WANT_AUTHN_RESPONSE_SIGNED", (process.env.SAML2_WANT_AUTHN_RESPONSE_SIGNED || "true").toLowerCase() !== "false");
+    app.set('SAML2_WANT_ASSERTIONS_SIGNED', (process.env.SAML2_WANT_ASSERTIONS_SIGNED || 'true').toLowerCase() !== 'false');
+    app.set('SAML2_WANT_AUTHN_RESPONSE_SIGNED', (process.env.SAML2_WANT_AUTHN_RESPONSE_SIGNED || 'true').toLowerCase() !== 'false');
     // audience the IdP must scope the assertion to; defaults to the SP entity ID
-    app.set("SAML2_AUDIENCE", process.env.SAML2_AUDIENCE || app.get("SAML2_ISSUER"));
+    app.set('SAML2_AUDIENCE', process.env.SAML2_AUDIENCE || app.get('SAML2_ISSUER'));
 
     // empty matches nothing — refuse to start rather than 403 every sign-in
-    if (app.get("WSFED_ALLOWED_REALMS").length === 0) {
+    if (app.get('WSFED_ALLOWED_REALMS').length === 0) {
         console.error('FATAL: WSFED_ALLOWED_REALMS is empty. Set it to a comma-separated list of the realm URLs allowed to receive tokens, e.g. "https://exchange.corp".');
         process.exit(1);
     }
@@ -170,10 +170,10 @@ const wsfedRouter = require('./routes/wsfed');
     // The token signing key is read here, not at the first sign-in: an unreadable
     // file is a deployment error and must stop the start.
     try {
-        app.set("WSFED_SIGNING", readSigningFiles(path.join(__dirname, 'certs'), {
-            cert:  app.get("WSFED_CERT"),
-            key:   app.get("WSFED_KEY"),
-            pkcs7: app.get("WSFED_PKCS7"),
+        app.set('WSFED_SIGNING', readSigningFiles(path.join(__dirname, 'certs'), {
+            cert:  app.get('WSFED_CERT'),
+            key:   app.get('WSFED_KEY'),
+            pkcs7: app.get('WSFED_PKCS7'),
         }));
     } catch (err) {
         console.error(`FATAL: cannot read a WS-Fed signing file in certs/: ${err.message}`);
@@ -184,7 +184,7 @@ const wsfedRouter = require('./routes/wsfed');
 
     // The session cookie host and the SAML callbackUrl come from WSFED_ISSUER, the
     // AuthnRequest goes to SAML2_IDP. http is for a local stack only.
-    for (const name of ["WSFED_ISSUER", "SAML2_IDP"]) {
+    for (const name of ['WSFED_ISSUER', 'SAML2_IDP']) {
         let url;
         try {
             url = parseHttpsUrl(name, app.get(name), { allowHttp: !production });
@@ -199,16 +199,16 @@ const wsfedRouter = require('./routes/wsfed');
     }
 
     if (production) {
-        if (!app.get("SAML2_WANT_ASSERTIONS_SIGNED")) {
+        if (!app.get('SAML2_WANT_ASSERTIONS_SIGNED')) {
             console.error('FATAL: SAML2_WANT_ASSERTIONS_SIGNED is disabled in a production environment. Unsigned assertions must never be accepted.');
             process.exit(1);
         }
-        if (!app.get("SAML2_WANT_AUTHN_RESPONSE_SIGNED")) {
+        if (!app.get('SAML2_WANT_AUTHN_RESPONSE_SIGNED')) {
             console.error('FATAL: SAML2_WANT_AUTHN_RESPONSE_SIGNED is disabled in a production environment. Unsigned SAML responses must never be accepted.');
             process.exit(1);
         }
         // The token form posts to https targets only (CSP form-action), so an http realm never gets a token.
-        const httpRealm = app.get("WSFED_ALLOWED_REALMS").find((origin) => origin.startsWith('http:'));
+        const httpRealm = app.get('WSFED_ALLOWED_REALMS').find((origin) => origin.startsWith('http:'));
         if (httpRealm !== undefined) {
             console.error(`FATAL: WSFED_ALLOWED_REALMS contains "${httpRealm}" in a production environment. The token form can post to https realms only.`);
             process.exit(1);
@@ -216,7 +216,7 @@ const wsfedRouter = require('./routes/wsfed');
         if (!process.env.SESSION_SECRET) {
             logWarn('SESSION_SECRET is not set: the random secret changes at every restart, and every sign-out record (__Host-wsfed_sso) issued before the restart becomes unreadable');
         }
-        if (app.get("SAML2_IDP_ISSUER") === "") {
+        if (app.get('SAML2_IDP_ISSUER') === '') {
             logWarn('SAML2_IDP_ISSUER is not set: the <Issuer> of IdP assertions and logout messages is not checked');
         }
     }
@@ -224,54 +224,54 @@ const wsfedRouter = require('./routes/wsfed');
 
 // Assign a unique request ID used in both the access log and error/warn log
 app.use(function assignRequestId(req, _res, next) {
-  req.requestId = crypto.randomUUID();
-  next();
+    req.requestId = crypto.randomUUID();
+    next();
 });
 
 app.use(function ecsAccessLog(req, res, next) {
-  const start = process.hrtime.bigint();
-  res.on('finish', () => {
-    const rec = {
-      '@timestamp':        new Date().toISOString(),
-      'log.level':         'info',
-      message:             'access_log',
-      'http.request.id':   req.requestId,
-      'event.duration':    Number(process.hrtime.bigint() - start), // nanoseconds (ECS)
-      'ecs.version':       '1.6.0',
-    };
-    formatHttpRequest(rec, req);
-    formatHttpResponse(rec, res);
-    // ecs-helpers copies every header. Cookie and Set-Cookie hold the session ID,
-    // which is a bearer credential until the token is issued.
-    delete rec.http.request.headers;
-    delete rec.http.response.headers;
-    // The GET callbacks carry signed SAML messages and one-time IDs in the query string.
-    rec.url.full = rec.url.full.split('?')[0];
-    delete rec.url.query;
-    delete rec.url.fragment;
-    // ecs-helpers takes the ID from the X-Request-ID client header when req.id is not set.
-    rec.http.request.id = req.requestId;
-    process.stdout.write(JSON.stringify(rec) + '\n');
-  });
-  next();
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+        const rec = {
+            '@timestamp':        new Date().toISOString(),
+            'log.level':         'info',
+            message:             'access_log',
+            'http.request.id':   req.requestId,
+            'event.duration':    Number(process.hrtime.bigint() - start), // nanoseconds (ECS)
+            'ecs.version':       '1.6.0',
+        };
+        formatHttpRequest(rec, req);
+        formatHttpResponse(rec, res);
+        // ecs-helpers copies every header. Cookie and Set-Cookie hold the session ID,
+        // which is a bearer credential until the token is issued.
+        delete rec.http.request.headers;
+        delete rec.http.response.headers;
+        // The GET callbacks carry signed SAML messages and one-time IDs in the query string.
+        rec.url.full = rec.url.full.split('?')[0];
+        delete rec.url.query;
+        delete rec.url.fragment;
+        // ecs-helpers takes the ID from the X-Request-ID client header when req.id is not set.
+        rec.http.request.id = req.requestId;
+        process.stdout.write(JSON.stringify(rec) + '\n');
+    });
+    next();
 });
 
 // Rate limiting — tight on the SAML callback (CPU-intensive XML verify), broad elsewhere
 const globalLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: app.get("RATE_LIMIT_PER_MINUTE"),
+    limit: app.get('RATE_LIMIT_PER_MINUTE'),
     standardHeaders: true,
     legacyHeaders: false,
 });
 const callbackLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: app.get("RATE_LIMIT_CALLBACK_PER_MINUTE"),
+    limit: app.get('RATE_LIMIT_CALLBACK_PER_MINUTE'),
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(globalLimiter);
-app.use(app.get("SAML2_ROOT") + '/callback', callbackLimiter);
-app.use(app.get("SAML2_ROOT") + '/logout/callback', callbackLimiter);
+app.use(app.get('SAML2_ROOT') + '/callback', callbackLimiter);
+app.use(app.get('SAML2_ROOT') + '/logout/callback', callbackLimiter);
 
 app.use(express.urlencoded({ extended: false, limit: '50kb' }));
 
@@ -293,111 +293,107 @@ app.use(session({
     saveUninitialized: false,
     store: new MemoryStore({
         checkPeriod: 60000,
-        max: app.get("SESSION_MAX_STORE"),
+        max: app.get('SESSION_MAX_STORE'),
     }),
     resave: false,
-    secret: app.get("SESSION_SECRET")
+    secret: app.get('SESSION_SECRET'),
 }));
 
 app.use(passport.initialize());
 app.use(passport.session({
-    keepSessionInfo: false
+    keepSessionInfo: false,
 }));
 
-app.use(app.get("SAML2_ROOT"), saml2Router);
-app.use(app.get("WSFED_ROOT"), wsfedRouter);
+app.use(app.get('SAML2_ROOT'), saml2Router);
+app.use(app.get('WSFED_ROOT'), wsfedRouter);
 app.get('/FederationMetadata/2007-06/FederationMetadata.xml', wsfedRouter.federationMetadata);
-
-
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
-  next(createError(404));
+    next(createError(404));
 });
 
 // error handler — log full details server-side, never expose them to the client
 app.use(function(err, req, res, next) {
-  const status = err.status || 500;
-  const rec = {
-    '@timestamp': new Date().toISOString(),
-    'log.level':  status >= 500 ? 'error' : 'warn',
-    message:      err.message,
-    'http.request.id':           req.requestId,
-    'http.request.method':       req.method,
-    // no query string: see the access log
-    'url.path':                  req.path,
-    'http.response.status_code': status,
-    'client.ip':                 req.ip,
-    'user_agent.original':       req.get('user-agent'),
-    'http.version':              req.httpVersion,
-    'ecs.version': '1.6.0',
-  };
-  if (status >= 500) formatError(rec, err);
-  process.stdout.write(JSON.stringify(rec) + '\n');
-  res.status(status);
-  res.locals.statusCode = status;
-  res.locals.statusMessage = http.STATUS_CODES[status] || 'Error';
-  res.render('error');
+    const status = err.status || 500;
+    const rec = {
+        '@timestamp': new Date().toISOString(),
+        'log.level':  status >= 500 ? 'error' : 'warn',
+        message:      err.message,
+        'http.request.id':           req.requestId,
+        'http.request.method':       req.method,
+        // no query string: see the access log
+        'url.path':                  req.path,
+        'http.response.status_code': status,
+        'client.ip':                 req.ip,
+        'user_agent.original':       req.get('user-agent'),
+        'http.version':              req.httpVersion,
+        'ecs.version': '1.6.0',
+    };
+    if (status >= 500) formatError(rec, err);
+    process.stdout.write(JSON.stringify(rec) + '\n');
+    res.status(status);
+    res.locals.statusCode = status;
+    res.locals.statusMessage = http.STATUS_CODES[status] || 'Error';
+    res.render('error');
 });
-
-
 
 // The node-saml cache has no size limit. A short TTL with the global rate limit keeps each client to about 900 entries.
 const SAML2_REQUEST_ID_TTL_MS = 15 * 60 * 1000;
 const samlOptions = {
-      callbackUrl:  "https://" + new URL(app.get("WSFED_ISSUER")).host + app.get("SAML2_ROOT") + "/callback",
-      path: app.get("SAML2_ROOT") + '/callback',
-      protocol: "https",
-      entryPoint: app.get("SAML2_IDP"),
-      issuer: app.get("SAML2_ISSUER"),
-      // explicit — node-saml otherwise falls back to `issuer`
-      audience: app.get("SAML2_AUDIENCE"),
-      wantAssertionsSigned: app.get("SAML2_WANT_ASSERTIONS_SIGNED"),
-      // pinned so a library default change cannot relax signature enforcement
-      wantAuthnResponseSigned: app.get("SAML2_WANT_AUTHN_RESPONSE_SIGNED"),
-      validateInResponseTo: ValidateInResponseTo.always,
-      requestIdExpirationPeriodMs: SAML2_REQUEST_ID_TTL_MS,
-      // one instance for both strategies: a saml-force response is checked by the "saml" /callback
-      cacheProvider: new InMemoryCacheProvider({ keyExpirationPeriodMs: SAML2_REQUEST_ID_TTL_MS }),
-      // the node-saml default of 0 rejects assertions over any clock drift
-      acceptedClockSkewMs: app.get("SAML2_CLOCK_SKEW_MS"),
-      identifierFormat: app.get("SAML2_IDENTIFIER_FORMAT"),
-      idpCert: fs.readFileSync(path.join(__dirname, "./certs" ,app.get("SAML2_IDP_PUB_KEY")), { encoding: 'utf8' }), // cert must be provided
+    callbackUrl:  'https://' + new URL(app.get('WSFED_ISSUER')).host + app.get('SAML2_ROOT') + '/callback',
+    path: app.get('SAML2_ROOT') + '/callback',
+    protocol: 'https',
+    entryPoint: app.get('SAML2_IDP'),
+    issuer: app.get('SAML2_ISSUER'),
+    // explicit — node-saml otherwise falls back to `issuer`
+    audience: app.get('SAML2_AUDIENCE'),
+    wantAssertionsSigned: app.get('SAML2_WANT_ASSERTIONS_SIGNED'),
+    // pinned so a library default change cannot relax signature enforcement
+    wantAuthnResponseSigned: app.get('SAML2_WANT_AUTHN_RESPONSE_SIGNED'),
+    validateInResponseTo: ValidateInResponseTo.always,
+    requestIdExpirationPeriodMs: SAML2_REQUEST_ID_TTL_MS,
+    // one instance for both strategies: a saml-force response is checked by the "saml" /callback
+    cacheProvider: new InMemoryCacheProvider({ keyExpirationPeriodMs: SAML2_REQUEST_ID_TTL_MS }),
+    // the node-saml default of 0 rejects assertions over any clock drift
+    acceptedClockSkewMs: app.get('SAML2_CLOCK_SKEW_MS'),
+    identifierFormat: app.get('SAML2_IDENTIFIER_FORMAT'),
+    idpCert: fs.readFileSync(path.join(__dirname, './certs', app.get('SAML2_IDP_PUB_KEY')), { encoding: 'utf8' }), // cert must be provided
 };
-if (app.get("SAML2_IDP_ISSUER") !== "") {
-    samlOptions.idpIssuer = app.get("SAML2_IDP_ISSUER");
+if (app.get('SAML2_IDP_ISSUER') !== '') {
+    samlOptions.idpIssuer = app.get('SAML2_IDP_ISSUER');
 }
-if (app.get("SAML2_SP_KEY") !== "") {
-    samlOptions.privateKey = fs.readFileSync(path.join(__dirname, "./certs", app.get("SAML2_SP_KEY")), { encoding: 'utf8' });
-    samlOptions.publicCert = fs.readFileSync(path.join(__dirname, "./certs", app.get("SAML2_SP_CERT")), { encoding: 'utf8' });
+if (app.get('SAML2_SP_KEY') !== '') {
+    samlOptions.privateKey = fs.readFileSync(path.join(__dirname, './certs', app.get('SAML2_SP_KEY')), { encoding: 'utf8' });
+    samlOptions.publicCert = fs.readFileSync(path.join(__dirname, './certs', app.get('SAML2_SP_CERT')), { encoding: 'utf8' });
     // node-saml signs with SHA-1 unless told otherwise
     samlOptions.signatureAlgorithm = 'sha256';
     samlOptions.digestAlgorithm = 'sha256';
 }
 
 function samlVerify(profile, done) {
-        let user;
-        try {
-            user = userFromProfile(profile, {
-                upnAttribute: app.get("SAML2_CLAIMS_UPN"),
-                sidAttribute: app.get("SAML2_CLAIMS_SID"),
-                sidBase64:    app.get("SAML2_CLAIMS_SID_BASE64"),
-                idpIssuer:    app.get("SAML2_IDP_ISSUER") || undefined,
-            });
-        } catch (err) {
-            // refused assertion, not a server error: /saml2/callback logs the message
-            if (err instanceof ClaimError) return done(null, false, { message: err.message });
-            return done(err);
-        }
-        return done(null, user);
+    let user;
+    try {
+        user = userFromProfile(profile, {
+            upnAttribute: app.get('SAML2_CLAIMS_UPN'),
+            sidAttribute: app.get('SAML2_CLAIMS_SID'),
+            sidBase64:    app.get('SAML2_CLAIMS_SID_BASE64'),
+            idpIssuer:    app.get('SAML2_IDP_ISSUER') || undefined,
+        });
+    } catch (err) {
+        // refused assertion, not a server error: /saml2/callback logs the message
+        if (err instanceof ClaimError) return done(null, false, { message: err.message });
+        return done(err);
+    }
+    return done(null, user);
 }
 
 function samlLogoutVerify(profile, done) {
-        const user = {};
-        user.id = profile["nameID"];
-        user.nameID = profile["nameID"];
-        user.nameIDFormat = profile["nameIDFormat"];
-        return done(null, user);
+    const user = {};
+    user.id = profile['nameID'];
+    user.nameID = profile['nameID'];
+    user.nameIDFormat = profile['nameIDFormat'];
+    return done(null, user);
 }
 
 passport.use(new SamlStrategy(samlOptions, samlVerify, samlLogoutVerify));
@@ -415,8 +411,5 @@ passport.serializeUser(function(user, done) {
 passport.deserializeUser(function(user, done) {
     done(null, user);
 });
-
-
-
 
 module.exports = app;
