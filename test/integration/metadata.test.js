@@ -5,7 +5,6 @@
 const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
-const express = require('express');
 const { DOMParser } = require('@xmldom/xmldom');
 const { SignedXml } = require('xml-crypto');
 

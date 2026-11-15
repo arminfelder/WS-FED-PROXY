@@ -26,21 +26,9 @@ jest.mock('wsfed', () => {
         }
         res.status(200).send('<html><body>token-issued</body></html>');
     });
-    const metadata = jest.fn(() => (req, res) => {
-        res.status(200).send('<EntityDescriptor issuer="' + _capturedIssuer + '"/>');
-    });
-    let _capturedIssuer = '';
-    // Wrap metadata to capture issuer argument
-    const metadataReal = (opts) => {
-        _capturedIssuer = opts.issuer;
-        return metadata(opts);
-    };
     return {
         auth,
-        metadata: (opts) => {
-            _capturedIssuer = opts.issuer;
-            return (req, res) => res.status(200).send(`<EntityDescriptor issuer="${opts.issuer}"/>`);
-        },
+        metadata: (opts) => (req, res) => res.status(200).send(`<EntityDescriptor issuer="${opts.issuer}"/>`),
         federationServerService: {
             wsdl: (req, res) => res.status(200).send('<wsdl/>'),
             thumbprint: jest.fn(() => (req, res) => res.status(200).send('<thumbprint/>')),

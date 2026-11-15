@@ -9,7 +9,6 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const passport = require('passport');
 const { hppPrevent } = require('hpp-prevent');
 const { parseAllowedRealms } = require('../../../util/validateRedirect');
 const { SESSION_COOKIE_NAME } = require('../../../util/sessionCookie');

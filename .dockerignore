@@ -23,6 +23,7 @@ docs
 dist
 .gitlab-ci.yml
 sonar-project.properties
+eslint.config.js
 *.tex
 *.pdf
 *.aux
