@@ -20,10 +20,8 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { formatHttpRequest, formatHttpResponse, formatError } = require('@elastic/ecs-helpers');
-const crypto_internal = require('crypto');
 const session = require('express-session');
 const MemoryStore = require('memorystore')(session)
-const wsfed = require("wsfed");
 const fs = require("fs");
 const crypto = require('crypto');
 const passport = require('passport');
@@ -226,7 +224,7 @@ const wsfedRouter = require('./routes/wsfed');
 
 // Assign a unique request ID used in both the access log and error/warn log
 app.use(function assignRequestId(req, _res, next) {
-  req.requestId = crypto_internal.randomUUID();
+  req.requestId = crypto.randomUUID();
   next();
 });
 
