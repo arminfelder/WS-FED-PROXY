@@ -135,6 +135,9 @@ const wsfedRouter = require('./routes/wsfed');
         app.set("SAML2_CLOCK_SKEW_MS", parseIntEnv("SAML2_CLOCK_SKEW_MS", process.env.SAML2_CLOCK_SKEW_MS, { def: 3000, min: 0, max: 300000 }));
         // seconds; how long sign-out can still reach the RPs and the IdP session
         app.set("WSFED_SSO_RECORD_MAX_AGE", parseIntEnv("WSFED_SSO_RECORD_MAX_AGE", process.env.WSFED_SSO_RECORD_MAX_AGE, { def: 28800, min: 60, max: 604800 }));
+        // requests in one minute for each client address; one sign-in is three requests, one of them a callback
+        app.set("RATE_LIMIT_PER_MINUTE", parseIntEnv("RATE_LIMIT_PER_MINUTE", process.env.RATE_LIMIT_PER_MINUTE, { def: 60, min: 1, max: 100000 }));
+        app.set("RATE_LIMIT_CALLBACK_PER_MINUTE", parseIntEnv("RATE_LIMIT_CALLBACK_PER_MINUTE", process.env.RATE_LIMIT_CALLBACK_PER_MINUTE, { def: 20, min: 1, max: 100000 }));
     } catch (err) {
         console.error(`FATAL: ${err.message}`);
         process.exit(1);
@@ -258,13 +261,13 @@ app.use(function ecsAccessLog(req, res, next) {
 // Rate limiting — tight on the SAML callback (CPU-intensive XML verify), broad elsewhere
 const globalLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: 60,
+    limit: app.get("RATE_LIMIT_PER_MINUTE"),
     standardHeaders: true,
     legacyHeaders: false,
 });
 const callbackLimiter = rateLimit({
     windowMs: 60 * 1000,
-    limit: 20,
+    limit: app.get("RATE_LIMIT_CALLBACK_PER_MINUTE"),
     standardHeaders: true,
     legacyHeaders: false,
 });
