@@ -32,10 +32,10 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
     const KEY = realFs.readFileSync(nodePath.join(__dirname, '../fixtures/test-cert.key'));
 
     // A LogoutResponse as Keycloak posts it (saml.force.post.binding), signed with the IdP key.
-    function signedLogoutResponse() {
+    function signedLogoutResponse(inResponseTo = '_req1') {
         const xml = '<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" ' +
             'xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_lr1" Version="2.0" ' +
-            `IssueInstant="${new Date().toISOString()}" InResponseTo="_req1" ` +
+            `IssueInstant="${new Date().toISOString()}" ${inResponseTo === null ? '' : `InResponseTo="${inResponseTo}" `}` +
             'Destination="https://proxy.example.com/saml2/logout/callback">' +
             '<saml:Issuer>https://idp.example.com/saml</saml:Issuer>' +
             '<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>' +
@@ -165,6 +165,14 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
                 expect(new URL(res.headers.location).searchParams.get('wa')).toBe('wsignoutcleanup1.0');
             });
 
+            test('the signed RelayState goes back to the IdP with the LogoutResponse', async () => {
+                const query = idpSigned(`SAMLRequest=${enc(logoutRequest('u@corp'))}&RelayState=kc-relay&SigAlg=${enc(SIGALG)}`);
+                // no sign-out record: the proxy answers the IdP at once
+                const res = await request(app).get('/saml2/logout/callback?' + query);
+                expect(res.status).toBe(302);
+                expect(new URL(res.headers.location).searchParams.get('RelayState')).toBe('kc-relay');
+            });
+
             test('a forged LogoutRequest under a percent-encoded key cannot borrow the signature of another message', async () => {
                 const genuine = idpSigned(`SAMLResponse=${enc(deflated('<samlp:LogoutResponse/>'))}&SigAlg=${enc(SIGALG)}`);
                 const res = await get(`SAMLReques%74=${enc(logoutRequest('u@corp'))}&${genuine}`);
@@ -186,13 +194,34 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
         });
     });
 
-    test('a signed LogoutResponse completes the sign-out', async () => {
-        // node-saml looks for InResponseTo only on <Response>, so with "always" this was
-        // rejected with "InResponseTo is missing from response"
-        const res = await request(app).post('/saml2/logout/callback').type('form')
-            .send({ SAMLResponse: signedLogoutResponse(), RelayState: 'f'.repeat(32) });
+    // The ID of a LogoutRequest that the proxy sent. node-saml keeps it until the answer arrives.
+    async function sentLogoutRequestId() {
+        const zlib = require('zlib');
+        const url = await require('passport')._strategy('saml')._saml.getLogoutUrlAsync({ nameID: 'u@corp' }, 'relay', {});
+        const xml = zlib.inflateRawSync(Buffer.from(new URL(url).searchParams.get('SAMLRequest'), 'base64')).toString();
+        return /ID="([^"]+)"/.exec(xml)[1];
+    }
+    const postLogoutResponse = (inResponseTo) => request(app).post('/saml2/logout/callback').type('form')
+        .send({ SAMLResponse: signedLogoutResponse(inResponseTo), RelayState: 'f'.repeat(32) });
+
+    test('a signed LogoutResponse to a LogoutRequest of the proxy completes the sign-out', async () => {
+        const res = await postLogoutResponse(await sentLogoutRequestId());
         expect(res.status).toBe(200);
         expect(res.text).toMatch(/signed out/i);
+    });
+
+    test('a signed LogoutResponse to a request that the proxy did not send is refused', async () => {
+        expect((await postLogoutResponse('_not-ours')).status).toBe(400);
+    });
+
+    test('a signed LogoutResponse works one time only', async () => {
+        const id = await sentLogoutRequestId();
+        expect((await postLogoutResponse(id)).status).toBe(200);
+        expect((await postLogoutResponse(id)).status).toBe(400);
+    });
+
+    test('a signed LogoutResponse without InResponseTo is refused', async () => {
+        expect((await postLogoutResponse(null)).status).toBe(400);
     });
 
     test('an unsigned LogoutResponse is still refused', async () => {
@@ -210,11 +239,11 @@ describe('POST /saml2/logout/callback with a real node-saml strategy', () => {
         expect(res.status).toBe(403);
     });
 
-    test('login responses keep InResponseTo "always"', () => {
+    test('login and logout responses must answer a request of the proxy (InResponseTo "always")', () => {
         const passport = require('passport');
         expect(passport._strategy('saml')._saml.options.validateInResponseTo).toBe('always');
         expect(passport._strategy('saml-force')._saml.options.validateInResponseTo).toBe('always');
-        expect(passport._strategy('saml-logout')._saml.options.validateInResponseTo).toBe('ifPresent');
+        expect(passport._strategy('saml-logout')).toBeUndefined();
     });
 });
 

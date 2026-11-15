@@ -107,7 +107,7 @@ router.get('/logout', async function (req, res, next) {
 // A valid LogoutResponse makes the strategy call pass(), which is the third argument here.
 // Any other result reaches the callback and is refused.
 function handleLogoutResponse(req, res, next) {
-    passport.authenticate('saml-logout', {session: false}, function (err, _user, info) {
+    passport.authenticate('saml', {session: false}, function (err, _user, info) {
         logError('saml logout response rejected', err || new Error((info && info.message) || 'not a LogoutResponse'), {
             'http.request.id': req.requestId,
             'client.ip': req.ip,
@@ -135,12 +135,13 @@ function isSameIdpSession(req, record, profile) {
 // already ended. Send wsignoutcleanup1.0 to the RPs in the sign-out record and remove the local state.
 // Then send the LogoutResponse to the IdP.
 async function handleIdpLogoutRequest(req, res, next) {
-    const saml = passport._strategy('saml-logout')._saml;
+    const saml = passport._strategy('saml')._saml;
     let result;
     try {
         result = req.method === 'GET'
-            // the redirect binding signs the raw query string, so pass it unparsed
-            ? await saml.validateRedirectAsync(req.query, req.originalUrl.split('?')[1] || '')
+            // The redirect binding signs the raw query string. With only that string, node-saml
+            // reads the message and the RelayState from the bytes that the signature covers.
+            ? await saml.validateRedirectAsync(req.originalUrl.split('?')[1] || '')
             : await saml.validatePostRequestAsync(req.body);
     } catch (err) {
         logError('saml logout request rejected', err, {'http.request.id': req.requestId, 'client.ip': req.ip});
@@ -149,7 +150,7 @@ async function handleIdpLogoutRequest(req, res, next) {
     if (!result || !result.loggedOut || !result.profile) {
         return next(createError(400, 'invalid SAML logout request'));
     }
-    const relayState = (req.query && req.query.RelayState) || (req.body && req.body.RelayState);
+    const relayState = req.method === 'GET' ? result.relayState : (req.body && req.body.RelayState);
     const responseUrl = await saml.getLogoutResponseUrlAsync(result.profile,
         typeof relayState === 'string' ? relayState : undefined, {}, true);
     const record = ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), req.app.get('SESSION_SECRET'));
@@ -174,10 +175,10 @@ router.use('/logout/callback', function (req, res, next) {
 
 const SIGNED_REDIRECT_PARAMS = ['SAMLRequest', 'SAMLResponse', 'RelayState', 'SigAlg'];
 
-// node-saml 5.1.0 reads the message from the parsed query. It finds the signed octets with a
-// substring search in the raw query (saml.js hasValidSignatureForRedirect).
-// The parser decodes a percent-encoded key, the search does not. Thus "SAMLReques%74" can hold a
-// message that the signature of a different parameter covers.
+// A second check, independent of the library. node-saml up to 5.1.0 read the message from the
+// parsed query, but found the signed octets with a substring search in the raw query.
+// "SAMLReques%74" could then hold a message that the signature of a different parameter covered.
+// node-saml 5.2.0 reads the message from the raw query (node-saml issue 493).
 // Each parameter that the parser found must be exactly one raw "name=" token, and no other
 // token can contain the name.
 function isUnambiguousRedirectQuery(rawQuery, query) {

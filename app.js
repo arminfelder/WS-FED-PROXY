@@ -399,10 +399,6 @@ function samlLogoutVerify(profile, done) {
 passport.use(new SamlStrategy(samlOptions, samlVerify, samlLogoutVerify));
 // node-saml reads forceAuthn from the constructor only. Used for wfresh=0.
 passport.use(new SamlStrategy({ ...samlOptions, name: 'saml-force', forceAuthn: true }, samlVerify, samlLogoutVerify));
-// Only for /saml2/logout/callback. For a POSTed message, node-saml reads InResponseTo only from a <Response> root.
-// Thus "always" refuses every POSTed LogoutResponse with "InResponseTo is missing".
-// The signature is still required, and the one-time RelayState binds the reply to our sign-out.
-passport.use(new SamlStrategy({ ...samlOptions, name: 'saml-logout', validateInResponseTo: ValidateInResponseTo.ifPresent }, samlVerify, samlLogoutVerify));
 
 passport.serializeUser(function(user, done) {
     done(null, user);

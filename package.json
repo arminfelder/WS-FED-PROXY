@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@elastic/ecs-helpers": "^2.1.1",
-    "@node-saml/node-saml": "^5.1.0",
+    "@node-saml/node-saml": "^5.2.0",
     "@node-saml/passport-saml": "^5.1.1",
     "@xmldom/xmldom": "^0.8.15",
     "debug": "^4.4.3",
@@ -36,7 +36,7 @@
     "passport": "^0.7.0",
     "pug": "^3.0.4",
     "wsfed": "^8.0.0",
-    "xml-crypto": "^6.3.2"
+    "xml-crypto": "^6.4.0"
   },
   "overrides": {
     "object-keys": "^1.1.1",
