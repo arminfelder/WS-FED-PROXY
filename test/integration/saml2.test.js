@@ -22,7 +22,7 @@ jest.mock('passport', () => {
         _strategy: jest.fn(() => ({ logout, _saml: mockIdpLogout })),
     };
 });
-// The IdP LogoutRequest that the stubbed 'saml-logout' strategy reports as valid
+// The IdP LogoutRequest that the stubbed 'saml' strategy reports as valid
 const mockIdpLogout = {
     profile: { nameID: 'u@corp', sessionIndex: 'idx-1' },
     validatePostRequestAsync: jest.fn(async () => ({ loggedOut: true, profile: mockIdpLogout.profile })),
