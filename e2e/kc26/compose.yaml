@@ -1,0 +1,29 @@
+# Keycloak 26 in place of Keycloak 16, for the browser tests in e2e/live. Use it through up.sh:
+#   docker compose -f docker-compose.yaml -f e2e/kc26/compose.yaml ...
+# Relative paths start at the directory of the first file, the repository root.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.4
+    command: !override
+      - start-dev
+      - --import-realm
+      - --https-port=8443
+      - --https-certificate-file=/certs/tls.crt
+      - --https-certificate-key-file=/certs/tls.key
+    environment: !override
+      # the admin of the master realm; the test user is in the realm lab
+      KC_BOOTSTRAP_ADMIN_USERNAME: kcadmin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KC_ADMIN_PW:?set KC_ADMIN_PW in the environment or in .env}"
+    ports: !override
+      - "8443:8443"
+    volumes: !override
+      # up.sh writes the realm file here, with the password from .env
+      - ./e2e/kc26/.run/import:/opt/keycloak/data/import:ro
+      - ./certs/nginx.crt:/certs/tls.crt:ro
+      - ./certs/nginx.key:/certs/tls.key:ro
+  proxy:
+    environment:
+      SAML2_IDP: https://192.168.102.1:8443/realms/lab/protocol/saml
+      SAML2_IDP_ISSUER: https://192.168.102.1:8443/realms/lab
+      # up.sh writes this file. certs/idp.pem stays the certificate of the Keycloak 16 realm.
+      SAML2_IDP_PUB_KEY: idp-kc26.pem

@@ -1,0 +1,8 @@
+{
+  "name": "ws-fed-proxy-e2e-live",
+  "private": true,
+  "description": "Browser tests against the lab: Exchange OWA, this proxy and Keycloak",
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}

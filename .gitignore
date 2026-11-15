@@ -230,3 +230,8 @@ certs/*
 share/
 backup/
 audit.json
+
+### Browser tests against the lab (e2e/live)
+e2e/live/report/
+e2e/live/test-results/
+e2e/kc26/.run/

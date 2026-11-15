@@ -1,0 +1,54 @@
+{
+  "realm": "lab",
+  "enabled": true,
+  "sslRequired": "external",
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [ {
+      "providerId": "declarative-user-profile",
+      "config": {
+        "kc.user.profile.config": [ "{\"attributes\":[{\"name\":\"username\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"email\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"firstName\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"lastName\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}}],\"unmanagedAttributePolicy\":\"ENABLED\"}" ]
+      }
+    } ]
+  },
+  "users": [ {
+    "username": "admin",
+    "enabled": true,
+    "email": "admin@example.test",
+    "emailVerified": true,
+    "firstName": "Lab",
+    "lastName": "Admin",
+    "attributes": {
+      "upn": [ "@@UPN@@" ],
+      "sid": [ "@@SID@@" ]
+    },
+    "credentials": [ { "type": "password", "value": "@@TEST_PW@@", "temporary": false } ]
+  } ],
+  "clients": [ {
+    "clientId": "passport-js",
+    "protocol": "saml",
+    "enabled": true,
+    "frontchannelLogout": true,
+    "redirectUris": [ "@@PROXY_ORIGIN@@/saml2/callback" ],
+    "attributes": {
+      "saml_single_logout_service_url_redirect": "@@PROXY_ORIGIN@@/saml2/logout/callback",
+      "saml_single_logout_service_url_post": "@@PROXY_ORIGIN@@/saml2/logout/callback",
+      "saml.force.post.binding": "true",
+      "saml.signature.algorithm": "RSA_SHA256",
+      "saml.client.signature": "false",
+      "saml.assertion.signature": "true",
+      "saml.server.signature": "true",
+      "saml.encrypt": "false",
+      "saml.authnstatement": "true",
+      "saml_force_name_id_format": "false",
+      "saml_name_id_format": "username",
+      "saml_signature_canonicalization_method": "http://www.w3.org/2001/10/xml-exc-c14n#"
+    },
+    "protocolMappers": [ {
+      "name": "upn", "protocol": "saml", "protocolMapper": "saml-user-attribute-mapper",
+      "config": { "user.attribute": "upn", "friendly.name": "upn", "attribute.name": "upn" }
+    }, {
+      "name": "sid", "protocol": "saml", "protocolMapper": "saml-user-attribute-mapper",
+      "config": { "user.attribute": "sid", "friendly.name": "sid", "attribute.name": "sid" }
+    } ]
+  } ]
+}
