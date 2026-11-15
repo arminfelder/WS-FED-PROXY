@@ -3,6 +3,6 @@
   "private": true,
   "description": "Browser tests against the lab: Exchange OWA, this proxy and Keycloak",
   "devDependencies": {
-    "@playwright/test": "1.55.0"
+    "@playwright/test": "1.65.1"
   }
 }
