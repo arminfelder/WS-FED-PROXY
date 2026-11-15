@@ -172,10 +172,31 @@ router.use('/logout/callback', function (req, res, next) {
     next(req.app.get("SAML2_SLO") ? undefined : createError(404));
 });
 
+const SIGNED_REDIRECT_PARAMS = ['SAMLRequest', 'SAMLResponse', 'RelayState', 'SigAlg'];
+
+// node-saml 5.1.0 reads the message from the parsed query. It finds the signed octets with a
+// substring search in the raw query (saml.js hasValidSignatureForRedirect).
+// The parser decodes a percent-encoded key, the search does not. Thus "SAMLReques%74" can hold a
+// message that the signature of a different parameter covers.
+// Each parameter that the parser found must be exactly one raw "name=" token, and no other
+// token can contain the name.
+function isUnambiguousRedirectQuery(rawQuery, query) {
+    if (query.SAMLRequest !== undefined && query.SAMLResponse !== undefined) return false;
+    const tokens = rawQuery.split('&');
+    return SIGNED_REDIRECT_PARAMS.every((name) => {
+        const found = tokens.filter((token) => token.includes(name));
+        if (query[name] === undefined) return found.length === 0;
+        return found.length === 1 && found[0].startsWith(name + '=');
+    });
+}
+
 router.get('/logout/callback', function (req, res, next) {
     // node-saml accepts an unsigned redirect-binding message, so require the signature here
     if (typeof req.query.Signature !== 'string') {
         return next(createError(400, 'signed SAML logout message required'));
+    }
+    if (!isUnambiguousRedirectQuery(req.originalUrl.split('?')[1] || '', req.query)) {
+        return next(createError(400, 'ambiguous SAML logout query'));
     }
     if (typeof req.query.SAMLRequest === 'string') {
         return handleIdpLogoutRequest(req, res, next).catch(next);
