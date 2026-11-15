@@ -265,18 +265,35 @@ router.get('/', (req, res, next) => {
             const maxAge = req.app.get("WSFED_SSO_RECORD_MAX_AGE");
             const record = ssoRecord.addRealm(
                 ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), secret), req.user, args.wtrealm, maxAge);
-            // callback() must fire inside destroy(): wsfed sends the response
-            // synchronously from it, so cookies set afterwards would be too late
-            req.session.destroy(function (err) {
-                if (err) {
-                    logError('session destroy failed', err, {'http.request.id': req.requestId})
-                }
-                clearSessionCookie(res);
+            const sendToken = function () {
                 res.cookie(ssoRecord.COOKIE_NAME, ssoRecord.seal(record, secret), {
                     ...SSO_COOKIE_OPTIONS,
                     maxAge: maxAge * 1000
                 });
                 return callback(null, redirectUrl)
+            };
+            // callback() must fire inside destroy() or regenerate(): wsfed sends the response
+            // synchronously from it, so cookies set afterwards would be too late
+            const pending = req.session.saml_pending;
+            if (pending && typeof pending === 'object' && Object.keys(pending).length > 0) {
+                // Other sign-ins of this browser wait for the IdP, for example in a second tab.
+                // The new session has a new ID and no login. It holds only their RelayState entries.
+                return req.session.regenerate(function (err) {
+                    if (err) {
+                        logError('session regenerate failed', err, {'http.request.id': req.requestId})
+                        clearSessionCookie(res);
+                    } else {
+                        req.session.saml_pending = pending;
+                    }
+                    return sendToken();
+                });
+            }
+            req.session.destroy(function (err) {
+                if (err) {
+                    logError('session destroy failed', err, {'http.request.id': req.requestId})
+                }
+                clearSessionCookie(res);
+                return sendToken();
             });
         }
     })(req, res, next)
