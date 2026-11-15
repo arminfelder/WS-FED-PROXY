@@ -39,7 +39,7 @@ class ExitError extends Error {}
 function startApp(env) {
     const saved = { ...process.env };
     for (const key of Object.keys(process.env)) {
-        if (/^(WSFED|SAML2|SESSION|TRUST_PROXY|NODE_ENV)/.test(key)) delete process.env[key];
+        if (/^(WSFED|SAML2|SESSION|TRUST_PROXY|NODE_ENV|RATE_LIMIT)/.test(key)) delete process.env[key];
     }
     Object.assign(process.env, BASE_ENV, env);
     const exit = jest.spyOn(process, 'exit').mockImplementation((code) => { throw new ExitError(String(code)); });
@@ -125,6 +125,41 @@ describe('app.js startup', () => {
 
         test('accepts an http realm outside production', () => {
             expect(startApp({ WSFED_ALLOWED_REALMS: 'http://owa.corp' }).thrown).toBeUndefined();
+        });
+    });
+
+    describe('rate limits', () => {
+        const request = require('supertest');
+
+        async function statuses(app, send, count) {
+            const write = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+            try {
+                const result = [];
+                for (let i = 0; i < count; i++) result.push((await send(request(app))).status);
+                return result;
+            } finally {
+                write.mockRestore();
+            }
+        }
+
+        test.each(['RATE_LIMIT_PER_MINUTE', 'RATE_LIMIT_CALLBACK_PER_MINUTE'])('exits 1 when %s is not a number', (name) => {
+            expectFatal({ [name]: 'many' }, new RegExp(`FATAL: ${name}`));
+        });
+
+        test('defaults to 60 requests and 20 callbacks for each client in one minute', () => {
+            const { app } = startApp({});
+            expect(app.get('RATE_LIMIT_PER_MINUTE')).toBe(60);
+            expect(app.get('RATE_LIMIT_CALLBACK_PER_MINUTE')).toBe(20);
+        });
+
+        test('RATE_LIMIT_PER_MINUTE sets the limit for all routes', async () => {
+            const { app } = startApp({ RATE_LIMIT_PER_MINUTE: '2' });
+            expect(await statuses(app, (r) => r.get('/nope'), 3)).toEqual([404, 404, 429]);
+        });
+
+        test('RATE_LIMIT_CALLBACK_PER_MINUTE sets the limit for the SAML callbacks', async () => {
+            const { app } = startApp({ RATE_LIMIT_CALLBACK_PER_MINUTE: '1' });
+            expect(await statuses(app, (r) => r.post('/saml2/callback').type('form').send({}), 2)).toEqual([400, 429]);
         });
     });
 
