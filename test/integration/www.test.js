@@ -1,6 +1,7 @@
 /**
  * bin/www as a child process: startup errors and the signal handling.
- * The idp.pem read of app.js is pointed at the fixture certificate.
+ * All certificate and key settings point to the fixtures: certs/ is empty in a clean
+ * checkout and in the image build, and a test must not read a real signing key.
  */
 
 const { spawn } = require('child_process');
@@ -13,6 +14,9 @@ const ENV = {
     DEBUG: 'ws-fed-saml-proxy:server',
     WSFED_ALLOWED_REALMS: 'https://exchange.corp',
     SAML2_IDP_PUB_KEY: '../test/fixtures/test-cert.pem',
+    WSFED_CERT: '../test/fixtures/test-cert.pem',
+    WSFED_KEY: '../test/fixtures/test-cert.key',
+    WSFED_PKCS7: '../test/fixtures/test-cert.pem',
 };
 
 function freePort() {
