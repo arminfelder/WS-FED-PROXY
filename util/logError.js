@@ -15,7 +15,7 @@ GNU General Public License for more details.
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-const { formatError } = require("@elastic/ecs-helpers");
+const { formatError } = require('@elastic/ecs-helpers');
 
 function record(level, msg, fields) {
     return {

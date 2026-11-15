@@ -36,7 +36,7 @@ const TEST_USER = {
 
 function buildTokenApp(opts = {}) {
     const app = express();
-    app.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: ["'none'"], scriptSrc: ["'unsafe-inline'", "'unsafe-eval'"], formAction: ["https:"] } }));
+    app.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: ["'none'"], scriptSrc: ["'unsafe-inline'", "'unsafe-eval'"], formAction: ['https:'] } }));
     app.use(helmet.referrerPolicy({ policy: 'origin-when-cross-origin' }));
     app.use(express.urlencoded({ extended: false }));
     app.use(session({ secret: 'test', resave: false, saveUninitialized: false, cookie: { secure: false } }));
@@ -88,7 +88,7 @@ function extractAssertion(wresult) {
 function verifySignature(assertionXml) {
     const doc = new DOMParser().parseFromString(assertionXml);
     const signatureNode = doc.documentElement.getElementsByTagNameNS(
-        'http://www.w3.org/2000/09/xmldsig#', 'Signature'
+        'http://www.w3.org/2000/09/xmldsig#', 'Signature',
     )[0];
     if (!signatureNode) throw new Error('No Signature element found in assertion');
 

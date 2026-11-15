@@ -17,21 +17,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const express = require('express');
 const createError = require('http-errors');
-const wsfed = require("wsfed");
-const profileMapper = require("../util/OWAProfileMapper");
-const {isRealmAllowed, isWreplyAllowed, allowedWreplyUrl} = require("../util/validateRedirect");
-const {logError} = require("../util/logError");
-const {metadataHandler} = require("../util/metadata");
-const {startSamlLogin} = require("../util/samlLogin");
-const ssoRecord = require("../util/ssoRecord");
-const {pendingLogout} = require("../util/pendingLogout");
-const {clearSessionCookie, clearSsoCookie, SSO_COOKIE_OPTIONS} = require("../util/cookies");
-const {sendCleanupThenContinue, continueCleanup} = require("../util/signoutPage");
+const wsfed = require('wsfed');
+const profileMapper = require('../util/OWAProfileMapper');
+const {isRealmAllowed, isWreplyAllowed, allowedWreplyUrl} = require('../util/validateRedirect');
+const {logError} = require('../util/logError');
+const {metadataHandler} = require('../util/metadata');
+const {startSamlLogin} = require('../util/samlLogin');
+const ssoRecord = require('../util/ssoRecord');
+const {pendingLogout} = require('../util/pendingLogout');
+const {clearSessionCookie, clearSsoCookie, SSO_COOKIE_OPTIONS} = require('../util/cookies');
+const {sendCleanupThenContinue, continueCleanup} = require('../util/signoutPage');
 const router = express.Router();
 
 // {cert, key, pkcs7}, read by app.js at startup (util/signingFiles.js)
 function signingFiles(req) {
-    return req.app.get("WSFED_SIGNING");
+    return req.app.get('WSFED_SIGNING');
 }
 
 const WSFED_PARAMS = ['wa', 'wtrealm', 'wreply', 'wctx', 'wfresh'];
@@ -41,21 +41,21 @@ const MAX_WFRESH_MINUTES = 525600;
 // WS-Federation 1.2 §13.2.2: wfresh is the maximum age of the authentication, in minutes.
 // Returns "ok", "reauth" (ask the IdP again, one time) or "stale".
 function checkFreshness(req, args) {
-    if (args.wfresh === undefined) return "ok";
+    if (args.wfresh === undefined) return 'ok';
     const authnInstant = Date.parse(req.user && req.user.authnInstant);
-    if (Number.isNaN(authnInstant)) return "stale";
-    const notBefore = args.wfresh === "0"
+    if (Number.isNaN(authnInstant)) return 'stale';
+    const notBefore = args.wfresh === '0'
         ? args.authRequestedAt
         : Date.now() - Number(args.wfresh) * 60000;
-    if (authnInstant + req.app.get("SAML2_CLOCK_SKEW_MS") >= notBefore) return "ok";
-    return args.reauthRequested ? "stale" : "reauth";
+    if (authnInstant + req.app.get('SAML2_CLOCK_SKEW_MS') >= notBefore) return 'ok';
+    return args.reauthRequested ? 'stale' : 'reauth';
 }
 
 // Seconds. The token must not outlive wfresh (WS-Federation 1.2 §13.2.2) or the IdP session
 // (SessionNotOnOrAfter, SAML 2.0 core §2.7.2). Returns null when less than one second remains:
 // the wsfed library turns a lifetime of 0 into 8 hours, so 0 must never reach it.
 function tokenLifetime(app, args, user) {
-    const limits = [app.get("WSFED_TOKEN_LIFETIME")];
+    const limits = [app.get('WSFED_TOKEN_LIFETIME')];
     const minutes = Number(args.wfresh);
     // wfresh=0 asks for a new login, not a 0-second token
     if (args.wfresh !== undefined && minutes > 0) limits.push(minutes * 60);
@@ -92,7 +92,7 @@ const CLEANUP_GIF = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAE
 // Like AD FS, wsignout1.0 has no confirmation step. Thus any site can end the session of a user with a link (logout CSRF).
 // A check of the request origin is not possible: OWA sends no Referer (<meta name="referrer"> in owa/default.aspx).
 async function signOut(req, res, next, query) {
-    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    const allowedOrigins = req.app.get('WSFED_ALLOWED_REALMS') || [];
     let wreply = null;
     if (query.wreply) {
         wreply = allowedWreplyUrl(query.wreply, allowedOrigins);
@@ -100,13 +100,13 @@ async function signOut(req, res, next, query) {
             return next(createError(403, `wreply origin not allowed: ${query.wreply}`));
         }
     }
-    const record = ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), req.app.get("SESSION_SECRET"));
+    const record = ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), req.app.get('SESSION_SECRET'));
     const user = ssoRecord.identity(req.isAuthenticated() ? req.user : null) || ssoRecord.identity(record);
-    const toIdp = req.app.get("SAML2_SLO") && user !== null;
+    const toIdp = req.app.get('SAML2_SLO') && user !== null;
     let continueUrl;
     if (toIdp) {
         // The state ID is the CSRF guard: /saml2/logout does not contact the IdP without it.
-        continueUrl = req.app.get("SAML2_ROOT") + "/logout?state=" + await pendingLogout.put({
+        continueUrl = req.app.get('SAML2_ROOT') + '/logout?state=' + await pendingLogout.put({
             kind: 'signout',
             user,
             wreply: wreply ? wreply.href : undefined,
@@ -114,7 +114,7 @@ async function signOut(req, res, next, query) {
     } else {
         // No IdP step, thus no state. A request without a session adds nothing to the store.
         // Without a state, /saml2/logout shows the "signed out" page.
-        continueUrl = wreply ? wreply.href : req.app.get("SAML2_ROOT") + "/logout";
+        continueUrl = wreply ? wreply.href : req.app.get('SAML2_ROOT') + '/logout';
     }
 
     req.session.destroy(function (err) {
@@ -133,7 +133,7 @@ async function signOut(req, res, next, query) {
 
 // WS-Federation 1.2 §13.2.4.2: remove local state only. Do not contact the IdP.
 function signOutCleanup(req, res, next, query) {
-    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    const allowedOrigins = req.app.get('WSFED_ALLOWED_REALMS') || [];
     // Check before any side effect, and redirect only to the parsed URL that was checked.
     let target = null;
     if (query.wreply) {
@@ -162,7 +162,7 @@ function signIn(req, res, next, query) {
     if (query.wtrealm === undefined) {
         return next(createError(400, 'wtrealm is required for wsignin1.0'));
     }
-    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    const allowedOrigins = req.app.get('WSFED_ALLOWED_REALMS') || [];
     if (!isRealmAllowed(query.wtrealm, allowedOrigins)) {
         return next(createError(403, `wtrealm not in allowlist: ${query.wtrealm}`));
     }
@@ -179,10 +179,10 @@ function signIn(req, res, next, query) {
 
 // No wa: the return from /saml2/callback, which redirects to the bare WSFED_ROOT.
 function continueSignIn(req, res, next) {
-    if (req.isAuthenticated() && "wsfed_args" in req.session) {
+    if (req.isAuthenticated() && 'wsfed_args' in req.session) {
         // re-validate: the allowlist may have changed since entry, and wreply
         // is what getPostURL() below hands the signed token to
-        const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+        const allowedOrigins = req.app.get('WSFED_ALLOWED_REALMS') || [];
         const args = req.session.wsfed_args;
         if (!isRealmAllowed(args.wtrealm, allowedOrigins)) {
             return next(createError(403, `wtrealm not in allowlist: ${args.wtrealm}`));
@@ -191,12 +191,12 @@ function continueSignIn(req, res, next) {
             return next(createError(403, `wreply origin not allowed: ${args.wreply}`));
         }
         const freshness = checkFreshness(req, args);
-        if (freshness === "reauth") {
+        if (freshness === 'reauth') {
             args.reauthRequested = true;
             args.authRequestedAt = Date.now();
             return startSamlLogin(req, res, next);
         }
-        if (freshness === "stale") {
+        if (freshness === 'stale') {
             return next(createError(403, `authentication is older than wfresh=${args.wfresh}`));
         }
         const lifetime = tokenLifetime(req.app, args, req.user);
@@ -210,8 +210,8 @@ function continueSignIn(req, res, next) {
     if (req.isAuthenticated()) { // authenticated without pending WS-Fed arguments: the session is not usable
         return signOut(req, res, next, {});
     }
-    if (req.app.get("INVALID_LOGIN_REDIRECT") !== "") {
-        return res.redirect(303, req.app.get("INVALID_LOGIN_REDIRECT"));
+    if (req.app.get('INVALID_LOGIN_REDIRECT') !== '') {
+        return res.redirect(303, req.app.get('INVALID_LOGIN_REDIRECT'));
     }
     next(createError(400, 'missing or invalid WS-Fed parameters (wa, wtrealm)'));
 }
@@ -222,11 +222,11 @@ router.get('/', (req, res, next) => {
         return next(createError(400, 'repeated or malformed WS-Fed parameter'));
     }
     switch (query.wa) {
-        case "wsignin1.0":
+        case 'wsignin1.0':
             return signIn(req, res, next, query);
-        case "wsignout1.0":
+        case 'wsignout1.0':
             return signOut(req, res, next, query);
-        case "wsignoutcleanup1.0":
+        case 'wsignoutcleanup1.0':
             return signOutCleanup(req, res, next, query);
         case undefined:
             return continueSignIn(req, res, next);
@@ -238,7 +238,7 @@ router.get('/', (req, res, next) => {
     const {cert, key} = signingFiles(req);
     const args = res.locals.wsfedArgs;
     return wsfed.auth({
-        issuer: req.app.get("WSFED_ISSUER"),
+        issuer: req.app.get('WSFED_ISSUER'),
         cert,
         key,
         // explicit — the library defaults to 8 hours
@@ -261,16 +261,16 @@ router.get('/', (req, res, next) => {
         getPostURL: function (_wtrealm, _wreply, req, callback) {
             // empty wreply falls back to wtrealm, already checked against the allowlist
             const redirectUrl = args.wreply || args.wtrealm;
-            const secret = req.app.get("SESSION_SECRET");
-            const maxAge = req.app.get("WSFED_SSO_RECORD_MAX_AGE");
+            const secret = req.app.get('SESSION_SECRET');
+            const maxAge = req.app.get('WSFED_SSO_RECORD_MAX_AGE');
             const record = ssoRecord.addRealm(
                 ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), secret), req.user, args.wtrealm, maxAge);
             const sendToken = function () {
                 res.cookie(ssoRecord.COOKIE_NAME, ssoRecord.seal(record, secret), {
                     ...SSO_COOKIE_OPTIONS,
-                    maxAge: maxAge * 1000
+                    maxAge: maxAge * 1000,
                 });
-                return callback(null, redirectUrl)
+                return callback(null, redirectUrl);
             };
             // callback() must fire inside destroy() or regenerate(): wsfed sends the response
             // synchronously from it, so cookies set afterwards would be too late
@@ -280,7 +280,7 @@ router.get('/', (req, res, next) => {
                 // The new session has a new ID and no login. It holds only their RelayState entries.
                 return req.session.regenerate(function (err) {
                     if (err) {
-                        logError('session regenerate failed', err, {'http.request.id': req.requestId})
+                        logError('session regenerate failed', err, {'http.request.id': req.requestId});
                         clearSessionCookie(res);
                     } else {
                         req.session.saml_pending = pending;
@@ -290,21 +290,21 @@ router.get('/', (req, res, next) => {
             }
             req.session.destroy(function (err) {
                 if (err) {
-                    logError('session destroy failed', err, {'http.request.id': req.requestId})
+                    logError('session destroy failed', err, {'http.request.id': req.requestId});
                 }
                 clearSessionCookie(res);
                 return sendToken();
             });
-        }
-    })(req, res, next)
+        },
+    })(req, res, next);
 });
 
 // WS-Federation 1.2 §3.2.2. app.js also mounts this at the server root.
 const federationMetadata = metadataHandler((req) => {
     const {cert, key} = signingFiles(req);
     return {
-        issuer: req.app.get("WSFED_ISSUER"),
-        endpoint: new URL(req.app.get("WSFED_ISSUER")).origin + req.app.get("WSFED_ROOT"),
+        issuer: req.app.get('WSFED_ISSUER'),
+        endpoint: new URL(req.app.get('WSFED_ISSUER')).origin + req.app.get('WSFED_ROOT'),
         cert,
         key,
         claimTypes: profileMapper.prototype.metadata,
@@ -325,7 +325,7 @@ function configuredHostRequest(req) {
         query: req.query,
         originalUrl: req.baseUrl + req.path,
         protocol: 'https',
-        headers: {host: new URL(req.app.get("WSFED_ISSUER")).host},
+        headers: {host: new URL(req.app.get('WSFED_ISSUER')).host},
     };
 }
 
@@ -336,8 +336,7 @@ router.get('/adfs/fs/federationserverservice.asmx', (req, res) => {
 router.post('/adfs/fs/federationserverservice.asmx',
     (req, res, next) => {
         const {cert, pkcs7} = signingFiles(req);
-        return wsfed.federationServerService.thumbprint({pkcs7, cert})(configuredHostRequest(req), res)
+        return wsfed.federationServerService.thumbprint({pkcs7, cert})(configuredHostRequest(req), res);
     });
-
 
 module.exports = router;

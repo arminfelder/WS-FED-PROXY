@@ -17,14 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const express = require('express');
 const createError = require('http-errors');
-const passport = require("passport");
-const {logError} = require("../util/logError");
-const {startSamlLogin, takeSignIn} = require("../util/samlLogin");
-const {allowedWreplyUrl} = require("../util/validateRedirect");
-const {pendingLogout} = require("../util/pendingLogout");
-const {clearSessionCookie, clearSsoCookie} = require("../util/cookies");
-const ssoRecord = require("../util/ssoRecord");
-const {sendCleanupThenContinue} = require("../util/signoutPage");
+const passport = require('passport');
+const {logError} = require('../util/logError');
+const {startSamlLogin, takeSignIn} = require('../util/samlLogin');
+const {allowedWreplyUrl} = require('../util/validateRedirect');
+const {pendingLogout} = require('../util/pendingLogout');
+const {clearSessionCookie, clearSsoCookie} = require('../util/cookies');
+const ssoRecord = require('../util/ssoRecord');
+const {sendCleanupThenContinue} = require('../util/signoutPage');
 
 async function takeRelay(relayState) {
     const entry = await pendingLogout.take(relayState);
@@ -46,7 +46,7 @@ router.get('/login', function (req, res, next) {
 // Where to land once the local session is gone: the sign-out wreply (WS-Federation 1.2 §13.2.4.1)
 // if it is still allowlisted, otherwise a "signed out" page, as AD FS does.
 function endLogout(req, res, wreply) {
-    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    const allowedOrigins = req.app.get('WSFED_ALLOWED_REALMS') || [];
     const target = allowedWreplyUrl(wreply, allowedOrigins);
     req.session.destroy(function (err) {
         if (err) {
@@ -107,7 +107,7 @@ router.get('/logout', async function (req, res, next) {
 // A valid LogoutResponse makes the strategy call pass(), which is the third argument here.
 // Any other result reaches the callback and is refused.
 function handleLogoutResponse(req, res, next) {
-    passport.authenticate("saml-logout", {session: false}, function (err, _user, info) {
+    passport.authenticate('saml-logout', {session: false}, function (err, _user, info) {
         logError('saml logout response rejected', err || new Error((info && info.message) || 'not a LogoutResponse'), {
             'http.request.id': req.requestId,
             'client.ip': req.ip,
@@ -152,7 +152,7 @@ async function handleIdpLogoutRequest(req, res, next) {
     const relayState = (req.query && req.query.RelayState) || (req.body && req.body.RelayState);
     const responseUrl = await saml.getLogoutResponseUrlAsync(result.profile,
         typeof relayState === 'string' ? relayState : undefined, {}, true);
-    const record = ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), req.app.get("SESSION_SECRET"));
+    const record = ssoRecord.open(ssoRecord.readCookie(req, ssoRecord.COOKIE_NAME), req.app.get('SESSION_SECRET'));
     if (!isSameIdpSession(req, record, result.profile)) {
         res.set('Cache-Control', 'no-store');
         return res.redirect(responseUrl);
@@ -169,7 +169,7 @@ async function handleIdpLogoutRequest(req, res, next) {
 
 // SAML2_SLO=false: the proxy sends no LogoutRequest, and it does not act on one from the IdP.
 router.use('/logout/callback', function (req, res, next) {
-    next(req.app.get("SAML2_SLO") ? undefined : createError(404));
+    next(req.app.get('SAML2_SLO') ? undefined : createError(404));
 });
 
 const SIGNED_REDIRECT_PARAMS = ['SAMLRequest', 'SAMLResponse', 'RelayState', 'SigAlg'];
@@ -222,7 +222,6 @@ router.get('/failure', function (req, res, next) {
     res.status(401).send('Authentication failed');
 });
 
-
 router.post('/callback', function (req, res, next) {
     // The ACS takes sign-in responses only. A LogoutRequest or LogoutResponse goes to
     // /logout/callback, which applies the SAML2_SLO gate and the sign-out record.
@@ -244,13 +243,13 @@ router.post('/callback', function (req, res, next) {
     }
     // custom callback instead of failureRedirect: it also catches the case where
     // the strategy declines without an error, which would otherwise be unlogged
-    passport.authenticate("saml", {keepSessionInfo: true}, function (err, user, info) {
+    passport.authenticate('saml', {keepSessionInfo: true}, function (err, user, info) {
         if (err || !user) {
             logError('saml assertion rejected', err || new Error((info && info.message) || 'authentication declined'), {
                 'http.request.id': req.requestId,
                 'client.ip': req.ip,
             });
-            return res.redirect(req.app.get("SAML2_ROOT") + "/failure");
+            return res.redirect(req.app.get('SAML2_ROOT') + '/failure');
         }
         // keepSessionInfo: logIn regenerates the session; wsfed_args must survive
         req.logIn(user, {keepSessionInfo: true}, function (err) {
@@ -259,12 +258,11 @@ router.post('/callback', function (req, res, next) {
                     'http.request.id': req.requestId,
                     'client.ip': req.ip,
                 });
-                return res.redirect(req.app.get("SAML2_ROOT") + "/failure");
+                return res.redirect(req.app.get('SAML2_ROOT') + '/failure');
             }
-            res.redirect(req.app.get("WSFED_ROOT"));
+            res.redirect(req.app.get('WSFED_ROOT'));
         });
     })(req, res, next);
 });
-
 
 module.exports = router;

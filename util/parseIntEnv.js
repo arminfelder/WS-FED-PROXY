@@ -29,7 +29,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * @throws {Error} if the value is not a whole number in [min, max]
  */
 function parseIntEnv(name, raw, { def, min, max }) {
-    if (raw === undefined || raw === null || String(raw).trim() === "") return def;
+    if (raw === undefined || raw === null || String(raw).trim() === '') return def;
 
     const value = String(raw).trim();
     if (!/^\d+$/.test(value)) {

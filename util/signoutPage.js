@@ -39,13 +39,13 @@ function cleanupUrl(realm, wreply) {
  * does not go back to wreply.
  */
 async function sendCleanupThenContinue(req, res, record, continueUrl) {
-    const allowedOrigins = req.app.get("WSFED_ALLOWED_REALMS") || [];
+    const allowedOrigins = req.app.get('WSFED_ALLOWED_REALMS') || [];
     const realms = record ? record.realms.filter((r) => isRealmAllowed(r, allowedOrigins)) : [];
     res.set('Cache-Control', 'no-store');
     if (realms.length === 0) {
         return res.redirect(continueUrl);
     }
-    if (req.app.get("WSFED_SIGNOUT_CLEANUP") === 'image') {
+    if (req.app.get('WSFED_SIGNOUT_CLEANUP') === 'image') {
         return sendImagePage(res, realms, continueUrl);
     }
     return redirectToNextRealm(req, res, realms, continueUrl);
@@ -67,7 +67,7 @@ function sendImagePage(res, realms, continueUrl) {
 async function redirectToNextRealm(req, res, realms, next) {
     const [realm, ...rest] = realms;
     const id = await pendingLogout.put({kind: 'cleanup', realms: rest, next});
-    const back = new URL(req.app.get("WSFED_ROOT") + '/signout/continue', new URL(req.app.get("WSFED_ISSUER")).origin);
+    const back = new URL(req.app.get('WSFED_ROOT') + '/signout/continue', new URL(req.app.get('WSFED_ISSUER')).origin);
     back.searchParams.set('c', id);
     res.set('Cache-Control', 'no-store');
     res.redirect(cleanupUrl(realm, back.href));

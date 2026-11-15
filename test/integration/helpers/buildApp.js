@@ -47,7 +47,7 @@ function buildApp(opts = {}) {
     app.set('WSFED_SIGNOUT_CLEANUP', opts.WSFED_SIGNOUT_CLEANUP || 'redirect');
     app.set('SAML2_CLOCK_SKEW_MS', opts.SAML2_CLOCK_SKEW_MS !== undefined ? opts.SAML2_CLOCK_SKEW_MS : 3000);
     app.set('WSFED_ALLOWED_REALMS', parseAllowedRealms(
-        opts.WSFED_ALLOWED_REALMS !== undefined ? opts.WSFED_ALLOWED_REALMS : 'https://exchange.corp'
+        opts.WSFED_ALLOWED_REALMS !== undefined ? opts.WSFED_ALLOWED_REALMS : 'https://exchange.corp',
     ));
 
     // same order as app.js: hppPrevent must run after the body parsers

@@ -364,7 +364,7 @@ describe('access log', () => {
 });
 
 describe('SAML request-ID cache', () => {
-    test("both strategies share one node-saml InMemoryCacheProvider with a short TTL", () => {
+    test('both strategies share one node-saml InMemoryCacheProvider with a short TTL', () => {
         const passport = require('passport');
         const { InMemoryCacheProvider } = require('@node-saml/node-saml/lib/in-memory-cache-provider');
         const cache = passport._strategy('saml')._saml.options.cacheProvider;

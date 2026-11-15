@@ -12,7 +12,6 @@ jest.mock('passport', () => {
     };
 });
 
-
 // Mock wsfed and fs so route tests don't need real certs
 jest.mock('wsfed', () => {
     const auth = jest.fn((opts) => (req, res, next) => {
@@ -119,7 +118,8 @@ describe('GET /wsfed — HTTP Parameter Pollution resistance', () => {
         const app = buildApp({ WSFED_ALLOWED_REALMS: 'https://exchange.corp/owa' });
         const res = await request(app).get('/wsfed?wa=wsignin1.0&wtrealm=https://exchange.corp/owa&wreply=https://exchange.corp/cb&wreply=https://attacker.com');
         expect(res.status).toBe(400);
-    });});
+    });
+});
 
 describe('GET /wsfed — wtrealm allowlist enforcement', () => {
     test('allows request when wtrealm is in WSFED_ALLOWED_REALMS', async () => {
