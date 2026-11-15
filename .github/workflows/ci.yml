@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22: the lowest version in "engines". 24: the version in the container image.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm test
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The builder stage runs the suite again, without certs/ and with the .dockerignore applied.
+      - run: docker build -t ws-fed-proxy:ci .
+      # Flags of the Node permission model fail at run time, not at build time.
+      - name: Start the image and request the endpoints
+        run: |
+          docker run -d --name proxy --read-only --cap-drop ALL \
+            -e WSFED_ISSUER=https://proxy.example.com/wsfed \
+            -e SAML2_IDP=https://idp.example.com/saml \
+            -e WSFED_ALLOWED_REALMS=https://exchange.example.com \
+            -e WSFED_CERT=../test/fixtures/test-cert.pem \
+            -e WSFED_KEY=../test/fixtures/test-cert.key \
+            -e WSFED_PKCS7=../test/fixtures/test-cert.pem \
+            -e SAML2_IDP_PUB_KEY=../test/fixtures/test-cert.pem \
+            ws-fed-proxy:ci
+          docker exec proxy /nodejs/bin/node test/smoke.js
+          docker stop proxy
+          test "$(docker inspect proxy --format '{{.State.ExitCode}}')" = 0
+      - if: failure()
+        run: docker logs proxy

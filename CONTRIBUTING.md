@@ -10,7 +10,8 @@ Terms that are not in the STE dictionary (for example "lint", "commit") are tech
 3. If the check shows layout errors, correct them automatically: `npm run lint:fix`
 4. Do the tests: `npm test`
 
-The GitLab CI job `test` does steps 2 and 4.
+The GitLab CI job `test` and the GitHub workflow `CI` do steps 2 and 4.
+The GitHub workflow also builds the container image, starts it and requests its endpoints (`test/smoke.js`).
 
 Node.js 22.13 or later is necessary (`engines` in `package.json`).
 
